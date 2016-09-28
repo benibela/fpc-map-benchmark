@@ -3,7 +3,7 @@ program hashbenchmark;
 {$mode objfpc}{$H+}
 {$define UseCThreads}
 
-//{$define benchmarkGenerics} does not compile
+{$define benchmarkGenerics}
 {$define benchmarkBEROsFLRE}
 {$define benchmarkBEROsPASMP}
 {$define benchmarkYAMERsHashmap}
@@ -298,16 +298,25 @@ end;
 {$endif}
 
 {$ifdef BENCHMARKGENERICS}
-procedure testGcontnrs;
+type generic TTestGeneric<TMap> = class
+  class procedure test; static;
+end;
+  TTestGenericLinear = specialize TTestGeneric<specialize TOpenAddressingLP<string, pointer>>;
+  TTestGenericQuadratic = specialize TTestGeneric<specialize TOpenAddressingQP<string, pointer>>;
+  TTestGenericDouble = specialize TTestGeneric<specialize TOpenAddressingDH<string, pointer>>;
+  TTestGenericCuckooD2 = specialize TTestGeneric<specialize TCuckooD2<string, pointer>>;
+  TTestGenericCuckooD4 = specialize TTestGeneric<specialize TCuckooD4<string, pointer>>;
+  TTestGenericCuckooD6 = specialize TTestGeneric<specialize TCuckooD6<string, pointer>>;
+class procedure TTestGeneric.test();
 var q, i, j: integer;
-  map: TDictionary;
+  map: TMap;
 begin
-  map := TMyGContnrsMap.Create;
+  map := TMap.create;
   q := 0;
   for i := 0 to keycount - 1 do begin
-    map.Insert(data[i], @data[i]);
+    map.add(data[i], @data[i]);
     for j := 0 to queryperkey - 1 do begin
-      if map.GetItem(data[randomqueries[q]]) <> @data[randomqueries[q]] then fail;
+      if map[data[randomqueries[q]]] <> @data[randomqueries[q]] then fail;
       inc(q);
     end;
   end;
@@ -347,9 +356,9 @@ var
 
 
 begin
-  keycount := 50000;
-  keylen := 20;
-  queryperkey := 3;
+  keycount := 1000;
+  keylen := 50;
+  queryperkey := 10;
 
   SetLength(data, keycount);
   fphashlist := TFPHashList.Create;
@@ -379,16 +388,23 @@ begin
   benchmark(mkHash, 'ghashmap.THashMap', '* -> *', @testGHashmap);
   benchmark(mkTree, 'gmap.TMap', '* -> *', @testGmap);
   benchmark(mkArray, 'fgl.TFPGMap', '* -> *', @testFPGmap);
-  benchmark(mkArray, 'sysutils.TStringList (strutils)', 'string -> TObject', @testStringList);
+  benchmark(mkArray, 'sysutils.TStringList_(sorted)', 'string -> TObject', @testStringList);
   benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);
   benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @testLazFPGHashTable);
 
 
-  {$ifdef benchmarkGenerics}todo{$endif}
+  {$ifdef benchmarkGenerics}
+  benchmark(mkHash, 'rtl-generics_linear', '* -> *', @TTestGenericLinear.test);
+  benchmark(mkHash, 'rtl-generics_quadratic', '* -> *', @TTestGenericQuadratic.test);
+  benchmark(mkHash, 'rtl-generics_double', '* -> *', @TTestGenericDouble.test);
+  benchmark(mkHash, 'rtl-generics_cuckoo2', '* -> *', @TTestGenericCuckooD2.test);
+  benchmark(mkHash, 'rtl-generics_cuckoo4', '* -> *', @TTestGenericCuckooD4.test);
+  benchmark(mkHash, 'rtl-generics_cuckoo6', '* -> *', @TTestGenericCuckooD6.test);
+  {$endif}
   {$ifdef benchmarkBEROsFLRE}benchmark(mkHash, 'Bero''s_TFLRECacheHashMap', 'string -> TFLRE', @testFLRE);{$endif}
   {$ifdef benchmarkBEROsPASMP}benchmark(mkParallelHash, 'Bero''s_TPasMPHashTable', '* -> *', @testPASMP);{$endif}
   {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap', '* -> *', @testGcontnrs);{$endif}
-  {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s_THashList', 'string -> pointer', @testBKHashList);{$endif}
+  {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s_THashList_(fixed_size)', 'string -> pointer', @testBKHashList);{$endif}
 
 end.
 

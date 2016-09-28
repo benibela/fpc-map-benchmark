@@ -42,7 +42,7 @@
     <PathDelim Value="\"/>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="\home\benito\hg\components\pascal\data\;\home\benito\hg\programs\contests\euler\;\home\benito\hg\components\pascal\internet\;\home\benito\hg\components\lazarus\dialogs\;\home\benito\hg\components\pascal\system\;\home\benito\hg\components\pascal\import\regexpr\source\;..\..\..\components\pascal\import\gcontnrs;..\..\..\..\components\pascal\import\generics.collections\src;..\..\..\..\components\pascal\import\pasmp\src;..\..\..\..\components\pascal\import\barrykellyhash"/>
+      <OtherUnitFiles Value="\home\benito\hg\components\pascal\data\;\home\benito\hg\programs\contests\euler\;\home\benito\hg\components\pascal\internet\;\home\benito\hg\components\lazarus\dialogs\;\home\benito\hg\components\pascal\system\;\home\benito\hg\components\pascal\import\regexpr\source\;..\..\..\components\pascal\import\gcontnrs;..\..\..\..\components\pascal\import\pasmp\src;..\..\..\..\components\pascal\import\barrykellyhash;\usr\local\lib\fpc\3.1.1\units\x86_64-linux\rtl-generics\"/>
       <SrcPath Value="\home\benito\hg\components\pascal\import\synapse\;..\..\import\synapse"/>
     </SearchPaths>
     <Parsing>
