@@ -14,6 +14,7 @@ uses
   {$IFDEF UNIX}{$IFDEF UseCThreads}
   cthreads,
   {$ENDIF}{$ENDIF}
+  rcmdline,
   Classes,sysutils,math,contnrs,ghashmap,IniFiles,fgl,gmap,lazfglhash
   {$ifdef benchmarkGenerics}, Generics.Collections{$endif} //https://github.com/dathox/generics.collections
   {$ifdef benchmarkBEROsFLRE}, FLRE{$endif} //https://github.com/BeRo1985/flre/
@@ -25,6 +26,7 @@ uses
 //set trees (usable as map with your own pair class): AvgLvlTree.TStringToStringTree, AVL_Tree
 
 type TMapKind = (mkHash, mkParallelHash, mkTree, mkArray);
+     TBenchmarkFunc = function: TObject;
 
 procedure fail;
 begin
@@ -35,7 +37,7 @@ var data: array of string;
     randomqueries: array of integer;
     keycount, keylen, queryperkey: integer;
 
-procedure benchmark(kind: TMapKind; name: string; args: string; p: TProcedure);
+procedure benchmark(kind: TMapKind; name: string; args: string; p: TBenchmarkFunc);
 const repcount = 5;
 var
   r: Integer;
@@ -47,14 +49,54 @@ begin
   mean := 0;
   for r := 1 to repcount do begin
     tms := frac(now)*MSecsPerDay;
-    p();
+    p().free;
     timing[r] := frac(now)*MSecsPerDay - tms;
     mean += timing[r];
   end;
   writeln(name, ' ', keycount, ' ', round(mean), ' +- ', round(stddev(pdouble(@timing[1]), repcount)));
 end;
 
-procedure testfphashlist;
+type generic TG_CallAddXCast<__TMap, TCast> = class
+  class procedure add(map: __TMap; const key: string; value: TCast); static; inline;
+  end;
+  generic TG_CallAdd<TMap> = class(specialize TG_CallAddXCast<TMap, pointer>);
+  generic TG_CallInsert<TMap> = class
+    class procedure add(map: TMap; const key: string; value: pointer); static; inline;
+  end;
+  generic TG_TestXDefaultXCast<TMap, TAdder, TCast> = class
+    class function test: TObject; static;
+  end;
+  generic TG_TestXDefault<__TMap, TAdder> = class(specialize TG_TestXDefaultXCast<__TMap, TAdder, pointer>);
+  generic TG_TestAddDefault<__TMap> = class(specialize TG_TestXDefault<__TMap, specialize TG_CallAdd<__TMap>>);
+  generic TG_TestInsertDefault<__TMap> = class(specialize TG_TestXDefault<__TMap, specialize TG_CallInsert<__TMap>>);
+
+class procedure TG_CallAddXCast.add(map: __TMap; const key: string; value: TCast); static; inline;
+begin
+  map.add(key, value);
+end;
+class procedure TG_CallInsert.add(map: TMap; const key: string; value: pointer); static; inline;
+begin
+  map.insert(key, value);
+end;
+
+class function TG_TestXDefaultXCast.test(): TObject;
+var q, i, j: integer;
+  map: TMap;
+begin
+  map := TMap.create;
+  q := 0;
+  for i := 0 to keycount - 1 do begin
+    TAdder.add(map, data[i], TCast(@data[i]));
+    for j := 0 to queryperkey - 1 do begin
+      if map[data[randomqueries[q]]] <> TCast(@data[randomqueries[q]]) then fail;
+      inc(q);
+    end;
+  end;
+  result := map;
+end;
+
+
+function testfphashlist: TObject;
 var q, i, j: integer;
   fphashlist: contnrs.TFPHashList;
 begin
@@ -67,24 +109,10 @@ begin
       inc(q);
     end;
   end;
-  fphashlist.Free;
+  result := fphashlist;
 end;
 
-procedure testfphashtable;
-var q, i, j: integer;
-  map: TFPObjectHashTable;
-begin
-  map := TFPObjectHashTable.Create(false);
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.Add(data[i], tobject(@data[i]));
-    for j := 0 to queryperkey - 1 do begin
-      if map.Items[data[randomqueries[q]]] <> tobject(@data[randomqueries[q]]) then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
+type TTestFPHashTable = specialize TG_TestAddDefault<TFPDataHashTable>;
 
 type TStringHash = class
   class function c(const a,b: string): boolean;
@@ -94,58 +122,11 @@ type TStringHash = class
 end;
 
 type
-  TMyGHMMap = specialize THashmap<string, pointer, TStringHash>;
-procedure testGHashmap;
-var q, i, j: integer;
-  map: TMyGHMMap;
-begin
-  map := TMyGHMMap.Create;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.Items[data[i]] := @data[i];
-    for j := 0 to queryperkey - 1 do begin
-      if map.Items[data[randomqueries[q]]] <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
+  TTestGHashMap = specialize TG_TestInsertDefault<specialize THashmap<string, pointer, TStringHash>>;
+  TTestGMap = specialize TG_TestInsertDefault<specialize TMap<string, pointer, TStringHash>>;
+  TTestFPGMap = specialize TG_TestAddDefault<specialize TFPGMap<string, pointer>>;
 
-type TMyGMap = specialize TMap<string, pointer, TStringHash>;
-procedure testGmap;
-var q, i, j: integer;
-  map: TMyGMap;
-begin
-  map := TMyGMap.Create;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.Insert(data[i], @data[i]);
-    for j := 0 to queryperkey - 1 do begin
-      if map.GetValue(data[randomqueries[q]]) <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
-
-type TMyFPGMap = class(specialize TFPGMap<string, pointer>);
-procedure testFPGmap;
-var q, i, j: integer;
-  map: TMyFPGMap;
-begin
-  map := TMyFPGMap.Create;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.AddOrSetData(data[i], @data[i]);
-    for j := 0 to queryperkey - 1 do begin
-      if map.KeyData[data[randomqueries[q]]] <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
-
-procedure testStringList;
+function testStringList: TObject;
 var q, i, j: integer;
   map: TStringList;
 begin
@@ -159,10 +140,10 @@ begin
       inc(q);
     end;
   end;
-  map.Free;
+  result := map;
 end;
 
-procedure testIniFiles;
+function testIniFiles: TObject;
 var q, i, j: integer;
   map: IniFiles.TStringHash;
 begin
@@ -175,8 +156,90 @@ begin
       inc(q);
     end;
   end;
-  map.Free;
+  result := map;
 end;
+
+
+
+
+type TTestLazFPGHashTable = specialize TG_TestAddDefault<specialize TLazFPGHashTable<pointer>>;
+
+
+{$ifdef benchmarkBEROsFLRE}
+type TTestFLRE = specialize TG_TestXDefaultXCast<TFLRECacheHashMap, specialize TG_CallAddXCast<TFLRECacheHashMap, TFLRECacheHashMapData>, TFLRECacheHashMapData>;
+{$endif}
+
+{$ifdef BENCHMARKBEROSPASMP}
+function testPASMP: TObject;
+var q, i, j: integer;
+  map: TPasMPStringHashTable;
+  p: PAnsiString;
+begin
+  map := TPasMPStringHashTable.Create(sizeof(pointer));
+  q := 0;
+  for i := 0 to keycount - 1 do begin
+    p := @data[i];
+    map.SetKeyValue(data[i], p);
+    for j := 0 to queryperkey - 1 do begin
+      map.GetKeyValue(data[randomqueries[q]], p);
+      if  p <> @data[randomqueries[q]] then fail;
+      inc(q);
+    end;
+  end;
+  result := map;
+end;
+{$endif}
+
+{$ifdef BENCHMARKYAMERSHASHMAP}
+type TMyGContnrsMap = class(specialize TGenHashMap<string, pointer>)
+  function DefaultHashKey(const Key: string): Integer; override;
+  function DefaultKeysEqual(const A, B: string): Boolean; override;
+end;
+
+function TMyGContnrsMap.DefaultHashKey(const Key: string): Integer;
+begin
+  Result:=TStringHash.rawhash(key);
+end;
+
+function TMyGContnrsMap.DefaultKeysEqual(const A, B: string): Boolean;
+begin
+  result := a = b;
+end;
+type TTestGContnrs = specialize TG_TestInsertDefault<TMyGContnrsMap>;
+{$endif}
+
+{$ifdef BENCHMARKGENERICS}
+type
+  TTestGenericLinear = specialize    TG_TestAddDefault<specialize TOpenAddressingLP<string, pointer>>;
+  TTestGenericQuadratic = specialize TG_TestAddDefault<specialize TOpenAddressingQP<string, pointer>>;
+  TTestGenericDouble = specialize    TG_TestAddDefault<specialize TOpenAddressingDH<string, pointer>>;
+  TTestGenericCuckooD2 = specialize  TG_TestAddDefault<specialize TCuckooD2<string, pointer>>;
+  TTestGenericCuckooD4 = specialize  TG_TestAddDefault<specialize TCuckooD4<string, pointer>>;
+  TTestGenericCuckooD6 = specialize  TG_TestAddDefault<specialize TCuckooD6<string, pointer>>;
+{$endif}
+
+{$ifdef benchmarkBARRYKELLYsHashlist}
+function testBKHashList: TObject;
+var q, i, j: integer;
+  map: HashList.THashList;
+  p: PAnsiString;
+  trait: TCaseSensitiveTraits;
+begin
+  trait := TCaseSensitiveTraits.Create;
+  map := thashlist.Create(trait, keycount);
+  q := 0;
+  for i := 0 to keycount - 1 do begin
+    p := @data[i];
+    map.Add(data[i], p);
+    for j := 0 to queryperkey - 1 do begin
+      if map.Data[data[randomqueries[q]]] <> @data[randomqueries[q]] then fail;
+      inc(q);
+    end;
+  end;
+  trait.free;
+  result := map;
+end;
+{$endif}
 
 class function TStringHash.c(const a, b: string): boolean;
 begin
@@ -205,149 +268,6 @@ begin
   result := rawhash(s) and (n - 1);
 end;
 
-
-
-type TMyLazFPGHashTable = class(specialize TLazFPGHashTable<pointer>);
-procedure testLazFPGHashTable;
-var q, i, j: integer;
-  map: TMyLazFPGHashTable;
-begin
-  map := TMyLazFPGHashTable.Create;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.Add(data[i], @data[i]);
-    for j := 0 to queryperkey - 1 do begin
-      if map.Items[data[randomqueries[q]]] <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
-
-
-
-{$ifdef benchmarkBEROsFLRE}
-procedure testFLRE;
-var q, i, j: integer;
-  map: TFLRECacheHashMap;
-begin
-  map := TFLRECacheHashMap.Create;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.Add(data[i], TFLRECacheHashMapData(@data[i]));
-    for j := 0 to queryperkey - 1 do begin
-      if map.Values[data[randomqueries[q]]] <> TFLRECacheHashMapData(@data[randomqueries[q]]) then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
-{$endif}
-
-{$ifdef BENCHMARKBEROSPASMP}
-procedure testPASMP;
-var q, i, j: integer;
-  map: TPasMPStringHashTable;
-  p: PAnsiString;
-begin
-  map := TPasMPStringHashTable.Create(sizeof(pointer));
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    p := @data[i];
-    map.SetKeyValue(data[i], p);
-    for j := 0 to queryperkey - 1 do begin
-      map.GetKeyValue(data[randomqueries[q]], p);
-      if  p <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
-{$endif}
-
-{$ifdef BENCHMARKYAMERSHASHMAP}
-type TMyGContnrsMap = class(specialize TGenHashMap<string, pointer>)
-  function DefaultHashKey(const Key: string): Integer; override;
-  function DefaultKeysEqual(const A, B: string): Boolean; override;
-end;
-
-function TMyGContnrsMap.DefaultHashKey(const Key: string): Integer;
-begin
-  Result:=TStringHash.rawhash(key);
-end;
-
-function TMyGContnrsMap.DefaultKeysEqual(const A, B: string): Boolean;
-begin
-  result := a = b;
-end;
-procedure testGcontnrs;
-var q, i, j: integer;
-  map: TMyGContnrsMap;
-begin
-  map := TMyGContnrsMap.Create;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.Insert(data[i], @data[i]);
-    for j := 0 to queryperkey - 1 do begin
-      if map.GetItem(data[randomqueries[q]]) <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
-{$endif}
-
-{$ifdef BENCHMARKGENERICS}
-type generic TTestGeneric<TMap> = class
-  class procedure test; static;
-end;
-  TTestGenericLinear = specialize TTestGeneric<specialize TOpenAddressingLP<string, pointer>>;
-  TTestGenericQuadratic = specialize TTestGeneric<specialize TOpenAddressingQP<string, pointer>>;
-  TTestGenericDouble = specialize TTestGeneric<specialize TOpenAddressingDH<string, pointer>>;
-  TTestGenericCuckooD2 = specialize TTestGeneric<specialize TCuckooD2<string, pointer>>;
-  TTestGenericCuckooD4 = specialize TTestGeneric<specialize TCuckooD4<string, pointer>>;
-  TTestGenericCuckooD6 = specialize TTestGeneric<specialize TCuckooD6<string, pointer>>;
-class procedure TTestGeneric.test();
-var q, i, j: integer;
-  map: TMap;
-begin
-  map := TMap.create;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.add(data[i], @data[i]);
-    for j := 0 to queryperkey - 1 do begin
-      if map[data[randomqueries[q]]] <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-end;
-{$endif}
-
-{$ifdef benchmarkBARRYKELLYsHashlist}
-procedure testBKHashList;
-var q, i, j: integer;
-  map: HashList.THashList;
-  p: PAnsiString;
-  trait: TCaseSensitiveTraits;
-begin
-  trait := TCaseSensitiveTraits.Create;
-  map := thashlist.Create(trait, keycount);
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    p := @data[i];
-    map.Add(data[i], p);
-    for j := 0 to queryperkey - 1 do begin
-      if map.Data[data[randomqueries[q]]] <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  map.Free;
-  trait.free;
-end;
-{$endif}
-
-
 var
   s: string;
   i, j: Integer;
@@ -356,7 +276,7 @@ var
 
 
 begin
-  keycount := 1000;
+  keycount := 10000;
   keylen := 50;
   queryperkey := 10;
 
@@ -384,13 +304,13 @@ begin
 
 
   benchmark(mkHash, 'contnrs.TFPHashList', 'shortstring -> pointer', @testfphashlist);
-  benchmark(mkHash, 'contnrs.TFPObjectHashTable', 'string -> TObject', @testfphashtable);
-  benchmark(mkHash, 'ghashmap.THashMap', '* -> *', @testGHashmap);
-  benchmark(mkTree, 'gmap.TMap', '* -> *', @testGmap);
-  benchmark(mkArray, 'fgl.TFPGMap', '* -> *', @testFPGmap);
+  benchmark(mkHash, 'contnrs.TFPDataHashTable', 'string -> pointer', @TTestFPHashTable.test);
+  benchmark(mkHash, 'ghashmap.THashMap', '* -> *', @TTestGHashMap.test);
+  benchmark(mkTree, 'gmap.TMap', '* -> *', @TTestGMap.test);
+  benchmark(mkArray, 'fgl.TFPGMap', '* -> *', @TTestFPGMap.test);
   benchmark(mkArray, 'sysutils.TStringList_(sorted)', 'string -> TObject', @testStringList);
   benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);
-  benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @testLazFPGHashTable);
+  benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);
 
 
   {$ifdef benchmarkGenerics}
@@ -401,9 +321,9 @@ begin
   benchmark(mkHash, 'rtl-generics_cuckoo4', '* -> *', @TTestGenericCuckooD4.test);
   benchmark(mkHash, 'rtl-generics_cuckoo6', '* -> *', @TTestGenericCuckooD6.test);
   {$endif}
-  {$ifdef benchmarkBEROsFLRE}benchmark(mkHash, 'Bero''s_TFLRECacheHashMap', 'string -> TFLRE', @testFLRE);{$endif}
+  {$ifdef benchmarkBEROsFLRE}benchmark(mkHash, 'Bero''s_TFLRECacheHashMap', 'string -> TFLRE', @TTestFLRE.test);{$endif}
   {$ifdef benchmarkBEROsPASMP}benchmark(mkParallelHash, 'Bero''s_TPasMPHashTable', '* -> *', @testPASMP);{$endif}
-  {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap', '* -> *', @testGcontnrs);{$endif}
+  {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap', '* -> *', @TTestGContnrs.test);{$endif}
   {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s_THashList_(fixed_size)', 'string -> pointer', @testBKHashList);{$endif}
 
 end.
