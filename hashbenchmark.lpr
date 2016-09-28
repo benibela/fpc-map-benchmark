@@ -14,7 +14,7 @@ uses
   {$IFDEF UNIX}{$IFDEF UseCThreads}
   cthreads,
   {$ENDIF}{$ENDIF}
-  rcmdline,
+  bbutils, rcmdline,
   Classes,sysutils,math,contnrs,ghashmap,IniFiles,fgl,gmap,lazfglhash
   {$ifdef benchmarkGenerics}, Generics.Collections{$endif} //https://github.com/dathox/generics.collections
   {$ifdef benchmarkBEROsFLRE}, FLRE{$endif} //https://github.com/BeRo1985/flre/
@@ -274,20 +274,50 @@ var
   fphashlist: TFPHashList;
   oldptr: Pointer;
 
-
+  cmdline: TCommandLineReader;
+  temps, sourcefile: string;
+  sources,sources2: tstringlist;
 begin
+  cmdline := TCommandLineReader.create;
+  cmdline.declareString('sources', 'Source file');
+
+  sourcefile := cmdline.readString('sources');
+
   keycount := 10000;
   keylen := 50;
   queryperkey := 10;
+
+  if sourcefile = '' then sources := nil
+  else begin
+    sources := tstringlist.create;
+    sources2 := tstringlist.create;
+    for temps in strSplit(sourcefile, {$ifdef windows}';'{$else}':'{$endif}) do begin
+      sources2.loadfromfile(temps);
+      sources.Capacity := max(sources.Capacity,sources.count + sources2.count);
+      for i := 0 to sources2.count - 1 do
+        sources.add(sources2[i]);
+    end;
+    sources2.free;
+    keycount := sources.count;
+    writeln(stderr, 'Done loading sources');
+  end;
+
 
   SetLength(data, keycount);
   fphashlist := TFPHashList.Create;
   fphashlist.Capacity := 5 * keycount;
   for i := 0 to keycount - 1 do begin
+    if sources <> nil then begin
+      oldptr := nil;
+      s := sources[i mod sources.count];
+    end;
     repeat
-      setlength(s, keylen);
-      for j := 1 to keylen do
-        s[j] := chr(Random(200)+32);
+      if sources = nil then begin
+        setlength(s, keylen);
+        for j := 1 to keylen do
+          s[j] := chr(Random(200)+32);
+      end else if oldptr <> nil then
+        s := s + chr(Random(200)+32);
       oldptr := fphashlist.Find(s);
       if oldptr = nil then break;
       if PString(oldptr)^ <> s then fail;
@@ -296,6 +326,8 @@ begin
     fphashlist.Add(s, @data[i]);
   end;
   fphashlist.Free;
+
+  writeln(stderr, 'Data count: ', length(data));
 
   SetLength(randomqueries, keycount * queryperkey);
   for i := 0 to keycount - 1 do
@@ -326,5 +358,6 @@ begin
   {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap', '* -> *', @TTestGContnrs.test);{$endif}
   {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s_THashList_(fixed_size)', 'string -> pointer', @testBKHashList);{$endif}
 
+  sources.free;
 end.
 
