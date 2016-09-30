@@ -48,25 +48,49 @@ end;
 var data: array of string;
     randomqueries: array of integer;
     keycount, keylen, queryperkey: integer;
+    timelimit, memlimit: int64;
 
-procedure benchmark(kind: TMapKind; name: string; args: string; p: TBenchmarkFunc);
+
+function benchmark(kind: TMapKind; name: string; args: string; p: TBenchmarkFunc): boolean;
 const repcount = 5;
 var
   r: Integer;
-  tms, mean: double;
+  tms, mean, meanmemory: double;
   timing: array[1..repcount] of double;
+  m: TMemoryManager;
+  memory: array[1..repcount] of double;
+  heapstatus: THeapStatus;
+  map: tobject;
 begin
   name := StringReplace(name,' ','_',[rfReplaceAll]);
+  result := false;
   if (kind = mkArray) and (keycount > 10000) then exit;
   if (kind = mkTree) and (keycount > 100000) then exit;
+  GetMemoryManager(m);
   mean := 0;
+  meanmemory := 0;
   for r := 1 to repcount do begin
+    heapstatus := m.GetHeapStatus();
     tms := frac(now)*MSecsPerDay;
-    p().free;
+    map := p();
     timing[r] := frac(now)*MSecsPerDay - tms;
+    memory[r] := m.GetHeapStatus().totalAllocated - heapstatus.totalAllocated;
+    map.free;
+    if timing[r] > timelimit then begin
+      writeln(stderr, name, ' time limit exceeded: ', round(timing[r]), ' > ', timelimit);
+      exit;
+    end;
+    if memory[r] > memlimit then begin
+      writeln(stderr, name, ' memory limit exceeded: ', round(memory[r]), ' > ', memlimit);
+      exit;
+    end;
     mean += timing[r];
+    meanmemory += memory[r];
   end;
-  writeln(name, ' ', keycount, ' ', round(mean), ' +- ', round(stddev(pdouble(@timing[1]), repcount)));
+  mean /= repcount;
+  meanmemory /= repcount;
+  writeln(name, ' ', keycount, ' ', round(mean), ' +- ', round(stddev(pdouble(@timing[1]), repcount)), ' ', round(meanmemory), ' +- ',  round(stddev(pdouble(@memory[1]), repcount)));
+  result := true;
 end;
 
 type generic TG_CallAddXCast<__TMap, TCast> = class
@@ -140,7 +164,7 @@ begin
   result := fphashlist;
 end;
 
-type TTestFPHashTable = specialize TG_TestAddDefault<TFPDataHashTable>;
+type TTestFPHashTable = specialize TG_TestAddDefault<contnrs.TFPDataHashTable>;
 
 type TStringHash = class
   class function c(const a,b: string): boolean;
@@ -254,7 +278,7 @@ var q, i, j: integer;
   trait: hashlist.TCaseSensitiveTraits;
 begin
   trait := hashlist.TCaseSensitiveTraits.Create;
-  map := thashlist.Create(trait, keycount);
+  map := thashlist.Create(trait, keycount div 2);
   q := 0;
   for i := 0 to keycount - 1 do begin
     p := @data[i];
@@ -270,7 +294,7 @@ end;
 {$endif}
 
 {$ifdef benchmarkCL4L}
-type TMyStrHashMap = class(TStrHashMap)
+type TMyStrHashMap = class(hashmap.TStrHashMap)
   constructor create;
   procedure insert(const key: string; value: pointer); inline;
 end;
@@ -278,7 +302,7 @@ end;
 
 constructor TMyStrHashMap.create;
 begin
-  inherited create(10, false);
+  inherited create(keycount div 2, false);
 end;
 procedure TMyStrHashMap.insert(const key: string; value: pointer);
 begin
@@ -295,7 +319,7 @@ type TTestLightContainers = specialize TG_TestAddDefault<TLightStringMap<pointer
 {$endif}
 
 {$ifdef benchmarkDeCAL}
-type TMyDMap = class(DMap)
+type TMyDMap = class(DeCAL.DMap)
   procedure add(const s: string; v: pointer); inline;
   function getvalue(const s: string): pointer; inline;
 end;
@@ -361,13 +385,18 @@ begin
   cmdline.declareString('sources', 'Source file');
   cmdline.declareInt('keycount', 'keycount', 0);
   cmdline.declareInt('keylen', 'keylen', 0);
-  cmdline.declareInt('queryperkey', 'queryperkey', 10);
+  cmdline.declareInt('queriesperkey', 'queryperkey', 10);
+  cmdline.declareInt('memlimit', 'mem limit', 1024*1024*1024);
+  cmdline.declareInt('timelimit', 'time limit', 10*60*1000);
+
+  timelimit := cmdline.readInt('timelimit');
+  memlimit := cmdline.readInt('memlimit');
 
   sourcefile := cmdline.readString('sources');
 
   keycount := cmdline.readInt('keycount');
   keylen := cmdline.readInt('keylen');
-  queryperkey := cmdline.readInt('queryperkey');
+  queryperkey := cmdline.readInt('queriesperkey');
 
   if sourcefile = '' then begin
     if keycount = 0 then keycount := 10000;
@@ -391,7 +420,7 @@ begin
 
   SetLength(data, keycount);
   fphashlist := TFPHashList.Create;
-  fphashlist.Capacity := 5 * keycount;
+  fphashlist.Capacity := keycount*2;
   for i := 0 to keycount - 1 do begin
     if sources <> nil then begin
       oldptr := nil;
@@ -444,8 +473,8 @@ begin
   {$ifdef benchmarkBEROsFLRE}benchmark(mkHash, 'Bero''s_TFLRECacheHashMap', 'string -> TFLRE', @TTestFLRE.test);{$endif}
   {$ifdef benchmarkBEROsPASMP}benchmark(mkParallelHash, 'Bero''s_TPasMPHashTable', '* -> *', @testPASMP);{$endif}
   {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap', '* -> *', @TTestGContnrs.test);{$endif}
-  {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s_THashList_(fixed_size)', 'string -> pointer', @testBKHashList);{$endif}
-  {$ifdef benchmarkCL4L}benchmark(mkHash, 'CL4L''s_TStrHashMap', 'string -> TObject', @TTestCL4LStrHashMap.test);{$endif}
+  {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s THashList (fixed size)', 'string -> pointer', @testBKHashList);{$endif}
+  {$ifdef benchmarkCL4L}benchmark(mkHash, 'CL4L''s_TStrHashMap (fixed size)', 'string -> TObject', @TTestCL4LStrHashMap.test);{$endif}
   {$ifdef benchmarkFundamentals}benchmark(mkHash, 'fundamentals TPointerDictionaryA', 'string -> pointer', @TTestFundamentalsPointerDictionaryA.test);{$endif}
   {$ifdef benchmarkLightContainers}benchmark(mkHash, 'marcov''s generic lightcontainers', '* -> *', @TTestLightContainers.test);{$endif}
   {$ifdef benchmarkDeCAL}benchmark(mkHash, 'hovadur''s DeCAL ', '* -> *', @TTestDeCAL.test);{$endif}
