@@ -4,6 +4,7 @@ program hashbenchmark;
 {$define UseCThreads}
 
 {$define benchmarkGenerics}
+//{$define benchmarkIniFiles} just a wrapper around TFPDataHashTable
 {$define benchmarkBEROsFLRE}
 {$define benchmarkBEROsPASMP}
 {$define benchmarkYAMERsHashmap}
@@ -21,7 +22,8 @@ uses
   cthreads,
   {$ENDIF}{$ENDIF}
   bbutils, rcmdline,
-  Classes,sysutils,math,contnrs,ghashmap,IniFiles,fgl,gmap,lazfglhash
+  Classes,sysutils,math,contnrs,ghashmap
+  {$ifdef benchmarkIniFiles},IniFiles{$endif},fgl,gmap,lazfglhash
   {$ifdef benchmarkGenerics}, Generics.Collections{$endif} //https://github.com/dathox/generics.collections
   {$ifdef benchmarkBEROsFLRE}, FLRE{$endif} //https://github.com/BeRo1985/flre/
   {$ifdef BENCHMARKBEROSPASMP}, PasMP{$endif} //https://github.com/BeRo1985/pasmp/
@@ -42,16 +44,19 @@ type TMapKind = (mkHash, mkParallelHash, mkTree, mkArray);
 
 procedure fail;
 begin
-  raise exception.create('failed');
+  writeln(stderr, 'failed');
+  halt;
 end;
 
 var data: array of string;
     randomqueries: array of integer;
     keycount, keylen, queryperkey: integer;
     timelimit, memlimit: int64;
+    queryMode: (qmFPCRandomQueryList, qmXorShift);
+    runMode: (rmList, rmSingleRun, rmAddativeKeyCount);
+    mapFilter: string;
 
-
-function benchmark(kind: TMapKind; name: string; args: string; p: TBenchmarkFunc): boolean;
+function benchmarkf(kind: TMapKind; name: string; p: TBenchmarkFunc): boolean;
 const repcount = 5;
 var
   r: Integer;
@@ -62,10 +67,7 @@ var
   heapstatus: THeapStatus;
   map: tobject;
 begin
-  name := StringReplace(name,' ','_',[rfReplaceAll]);
   result := false;
-  if (kind = mkArray) and (keycount > 10000) then exit;
-  if (kind = mkTree) and (keycount > 100000) then exit;
   GetMemoryManager(m);
   mean := 0;
   meanmemory := 0;
@@ -93,23 +95,56 @@ begin
   result := true;
 end;
 
+procedure benchmark(kind: TMapKind; name: string; args: string; p: TBenchmarkFunc);
+begin
+  name := StringReplace(name,' ','_',[rfReplaceAll]);
+  name := StringReplace(name,'''','',[rfReplaceAll]);
+  if (mapFilter <> '') and (name <> mapFilter) then exit();
+  case runMode of
+    rmList: begin
+      writeln(name);
+      exit;
+    end;
+    rmSingleRun: if mapfilter = '' then begin
+      if (kind = mkArray) and (keycount > 10000) then exit;
+      if (kind = mkTree) and (keycount > 100000) then exit;
+    end;
+  end;
+  if not benchmarkf(kind, name, p) then begin
+    flush(system.output);
+    flush(stdout);
+    halt;
+  end;
+end;
+
+
 type generic TG_CallAddXCast<__TMap, TCast> = class
   class procedure add(map: __TMap; const key: string; value: TCast); static; inline;
   end;
   generic TG_CallAdd<TMap> = class(specialize TG_CallAddXCast<TMap, pointer>);
+  generic TG_CallAddObjectXCast<TMap, TCast> = class
+    class procedure add(map: TMap; const key: string; value: TCast); static; inline;
+  end;
+  generic TG_CallAddObject<TMap> = class(specialize TG_CallAddObjectXCast<TMap, TObject>);
   generic TG_CallInsert<TMap> = class
     class procedure add(map: TMap; const key: string; value: pointer); static; inline;
   end;
-  generic TG_GetValue<TMap> = class
+  generic TG_CallSetKeyValue<TMap> = class
+    class procedure add(map: TMap; const key: string; value: pointer); static; inline;
+  end;
+  generic TG_CallGetValue<TMap> = class
     class function get(map: TMap; const key: string): pointer; static; inline;
   end;
-  generic TG_GetDefault<TMap> = class
+  generic TG_CallGetDefault<TMap> = class
+    class function get(map: TMap; const key: string): pointer; static; inline;
+  end;
+  generic TG_CallGetFind<TMap> = class
     class function get(map: TMap; const key: string): pointer; static; inline;
   end;
   generic TG_TestXXX<TMap, TAdder, TGetter, TCast> = class
     class function test: TObject; static;
   end;
-  generic TG_TestXDefaultXCast<__TMap, TAdder, TCast> = class(specialize TG_TestXXX<__TMap, TAdder, specialize TG_GetDefault<__TMap>, TCast>);
+  generic TG_TestXDefaultXCast<__TMap, TAdder, TCast> = class(specialize TG_TestXXX<__TMap, TAdder, specialize TG_CallGetDefault<__TMap>, TCast>);
   generic TG_TestXDefault<__TMap, TAdder> = class(specialize TG_TestXDefaultXCast<__TMap, TAdder, pointer>);
   generic TG_TestAddDefault<__TMap> = class(specialize TG_TestXDefault<__TMap, specialize TG_CallAdd<__TMap>>);
   generic TG_TestInsertDefault<__TMap> = class(specialize TG_TestXDefault<__TMap, specialize TG_CallInsert<__TMap>>);
@@ -118,53 +153,64 @@ class procedure TG_CallAddXCast.add(map: __TMap; const key: string; value: TCast
 begin
   map.add(key, value);
 end;
+class procedure TG_CallAddObjectXCast.add(map: TMap; const key: string; value: TCast); static; inline;
+begin
+  map.addObject(key, TCast(value));
+end;
 class procedure TG_CallInsert.add(map: TMap; const key: string; value: pointer); static; inline;
 begin
   map.insert(key, value);
 end;
-class function TG_GetValue.get(map: TMap; const key: string): pointer; static; inline;
+class procedure TG_CallSetKeyValue.add(map: TMap; const key: string; value: pointer); static; inline;
+begin
+  map.SetKeyValue(key, value);
+end;
+class function TG_CallGetValue.get(map: TMap; const key: string): pointer; static; inline;
 begin
   result := pointer(map.getvalue(key));
 end;
-class function TG_GetDefault.get(map: TMap; const key: string): pointer; static; inline;
+class function TG_CallGetDefault.get(map: TMap; const key: string): pointer; static; inline;
 begin
   result := pointer(map[key]);
+end;
+class function TG_CallGetFind.get(map: TMap; const key: string): pointer; static; inline;
+begin
+  result := pointer(map.find(key));
 end;
 
 class function TG_TestXXX.test(): TObject;
 var q, i, j: integer;
   map: TMap;
+  xorshift: cardinal;
 begin
   map := TMap.create;
   q := 0;
+  xorshift := 314159265;
   for i := 0 to keycount - 1 do begin
     TAdder.add(map, data[i], TCast(@data[i]));
-    for j := 0 to queryperkey - 1 do begin
-      if TGetter.get(map, data[randomqueries[q]]) <> @data[randomqueries[q]] then fail;
-      inc(q);
+    case queryMode of
+      qmFPCRandomQueryList:
+        for j := 0 to queryperkey - 1 do begin
+          if TGetter.get(map, data[randomqueries[q]]) <> @data[randomqueries[q]] then fail;
+          inc(q);
+        end;
+      qmXorShift:
+        for j := 0 to queryperkey - 1 do begin
+          q := xorshift mod (i + 1);
+          if TGetter.get(map, data[q]) <> @data[q] then fail;
+          xorshift := xorshift xor (xorshift shl 13);
+          xorshift := xorshift xor (xorshift shr 17);
+          xorshift := xorshift xor (xorshift shl 5);
+        end;
     end;
   end;
   result := map;
 end;
 
 
-function testfphashlist: TObject;
-var q, i, j: integer;
-  fphashlist: contnrs.TFPHashList;
-begin
-  fphashlist := TFPHashList.Create;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    fphashlist.Add(data[i], @data[i]);
-    for j := 0 to queryperkey - 1 do begin
-      if fphashlist.Find(data[randomqueries[q]]) <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  result := fphashlist;
-end;
-
-type TTestFPHashTable = specialize TG_TestAddDefault<contnrs.TFPDataHashTable>;
+type
+  TTestFPHashList = specialize TG_TestXXX<contnrs.TFPHashList, specialize TG_CallAdd<TFPHashList>, specialize TG_CallGetFind<TFPHashList>, pointer>;
+  TTestFPHashTable = specialize TG_TestAddDefault<contnrs.TFPDataHashTable>;
 
 type TStringHash = class
   class function c(const a,b: string): boolean;
@@ -173,28 +219,40 @@ type TStringHash = class
   //equal(const AKey1, AKey2: TKey): Boolean;
 end;
 
+type TMyFPGMap = class(specialize TFPGMap<string, pointer>)
+  constructor create;
+end;
+
+constructor TMyFPGMap.create;
+begin
+  inherited;
+  sorted := true;
+end;
+
 type
   TTestGHashMap = specialize TG_TestInsertDefault<specialize THashmap<string, pointer, TStringHash>>;
   TTestGMap = specialize TG_TestInsertDefault<specialize TMap<string, pointer, TStringHash>>;
-  TTestFPGMap = specialize TG_TestAddDefault<specialize TFPGMap<string, pointer>>;
+  TTestFPGMap = specialize TG_TestAddDefault<TMyFPGMap>;
 
-function testStringList: TObject;
-var q, i, j: integer;
-  map: TStringList;
-begin
-  map := TStringList.Create;
-  map.Sorted := true;
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    map.AddObject(data[i], tobject(@data[i]));
-    for j := 0 to queryperkey - 1 do begin
-      if map.Objects[map.IndexOf(data[randomqueries[q]])] <> tobject(@data[randomqueries[q]]) then fail;
-      inc(q);
-    end;
+  TStringListSorted = class(classes.TStringList)
+    constructor create;
+    function getValue(const key: string): pointer; inline;
   end;
-  result := map;
-end;
 
+  constructor TStringListSorted.create;
+  begin
+    inherited;
+    sorted := true;
+  end;
+
+  function TStringListSorted.getValue(const key: string): pointer; inline;
+  begin
+    result := pointer(Objects[IndexOf(key)]);
+  end;
+
+type TTestStringList = specialize TG_TestXXX<TStringListSorted, specialize TG_CallAddObject<TStringListSorted>, specialize TG_CallGetValue<TStringListSorted>, TObject>;
+
+{$ifdef benchmarkIniFiles}
 function testIniFiles: TObject;
 var q, i, j: integer;
   map: IniFiles.TStringHash;
@@ -210,8 +268,7 @@ begin
   end;
   result := map;
 end;
-
-
+{$endif}
 
 
 type TTestLazFPGHashTable = specialize TG_TestAddDefault<specialize TLazFPGHashTable<pointer>>;
@@ -222,24 +279,19 @@ type TTestFLRE = specialize TG_TestXDefaultXCast<TFLRECacheHashMap, specialize T
 {$endif}
 
 {$ifdef BENCHMARKBEROSPASMP}
-function testPASMP: TObject;
-var q, i, j: integer;
-  map: TPasMPStringHashTable;
-  p: PAnsiString;
-begin
-  map := TPasMPStringHashTable.Create(sizeof(pointer));
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    p := @data[i];
-    map.SetKeyValue(data[i], p);
-    for j := 0 to queryperkey - 1 do begin
-      map.GetKeyValue(data[randomqueries[q]], p);
-      if  p <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  result := map;
+type TMyPasMPStringHashTable = class(pasmp.TPasMPStringHashTable)
+  constructor create;
+  function getValue(const key: string): pointer; inline;
 end;
+constructor TMyPasMPStringHashTable.create;
+begin
+  inherited create(sizeof(pointer));
+end;
+function TMyPasMPStringHashTable.getValue(const key: string): pointer;
+begin
+  GetKeyValue(key, result);
+end;
+type TTestPasMPStringHashTable = specialize TG_TestXXX<TMyPasMPStringHashTable, specialize TG_CallSetKeyValue<TMyPasMPStringHashTable>, specialize TG_CallGetValue<TMyPasMPStringHashTable>, pointer>;
 {$endif}
 
 {$ifdef BENCHMARKYAMERSHASHMAP}
@@ -271,26 +323,26 @@ type
 {$endif}
 
 {$ifdef benchmarkBARRYKELLYsHashlist}
-function testBKHashList: TObject;
-var q, i, j: integer;
-  map: HashList.THashList;
-  p: PAnsiString;
-  trait: hashlist.TCaseSensitiveTraits;
+type TMyBKHashList = class(HashList.THashList)
+  trait : hashlist.TCaseSensitiveTraits;
+  constructor create;
+  destructor destroy; override;
+end;
+constructor TMyBKHashList.create;
 begin
   trait := hashlist.TCaseSensitiveTraits.Create;
-  map := thashlist.Create(trait, keycount div 2);
-  q := 0;
-  for i := 0 to keycount - 1 do begin
-    p := @data[i];
-    map.Add(data[i], p);
-    for j := 0 to queryperkey - 1 do begin
-      if map.Data[data[randomqueries[q]]] <> @data[randomqueries[q]] then fail;
-      inc(q);
-    end;
-  end;
-  trait.free;
-  result := map;
+  inherited create(trait, keycount div 2);
 end;
+destructor TMyBKHashList.destroy;
+begin
+  trait.free;
+  inherited;
+end;
+type TTestBKHashList = specialize TG_TestAddDefault<TMyBKHashList>;
+{
+p := @data[i];
+map.Add(data[i], p);
+}
 {$endif}
 
 {$ifdef benchmarkCL4L}
@@ -298,7 +350,7 @@ type TMyStrHashMap = class(hashmap.TStrHashMap)
   constructor create;
   procedure insert(const key: string; value: pointer); inline;
 end;
-   TTestCL4LStrHashMap = class(specialize TG_TestXXX<TMyStrHashMap, specialize TG_CallInsert<TMyStrHashMap>, specialize TG_GetValue<TMyStrHashMap>, pointer>);
+   TTestCL4LStrHashMap = class(specialize TG_TestXXX<TMyStrHashMap, specialize TG_CallInsert<TMyStrHashMap>, specialize TG_CallGetValue<TMyStrHashMap>, pointer>);
 
 constructor TMyStrHashMap.create;
 begin
@@ -331,7 +383,7 @@ function TMyDMap.getvalue(const s: string): pointer; inline;
 begin
   result := getPointer(locate([s]));
 end;
-type TTestDeCAL = class(specialize TG_TestXXX<TMyDMap, specialize TG_CallAdd<TMyDMap>, specialize TG_GetValue<TMyDMap>, pointer>);
+type TTestDeCAL = class(specialize TG_TestXXX<TMyDMap, specialize TG_CallAdd<TMyDMap>, specialize TG_CallGetValue<TMyDMap>, pointer>);
 {$endif}
 
 {$ifdef benchmarkJUHAsStringHashMap}
@@ -373,7 +425,7 @@ end;
 
 var
   s: string;
-  i, j: Integer;
+  i, j, basekeycount: Integer;
   fphashlist: TFPHashList;
   oldptr: Pointer;
 
@@ -385,12 +437,15 @@ begin
   cmdline.declareString('sources', 'Source file');
   cmdline.declareInt('keycount', 'keycount', 0);
   cmdline.declareInt('keylen', 'keylen', 0);
-  cmdline.declareInt('queriesperkey', 'queryperkey', 10);
-  cmdline.declareInt('memlimit', 'mem limit', 1024*1024*1024);
+  cmdline.declareInt('queriesperkey', 'queryperkey', 100);
+  cmdline.declareInt('memlimit', 'mem limit (MB)', 1024);
   cmdline.declareInt('timelimit', 'time limit', 10*60*1000);
+  cmdline.declareString('mode', ' list, single-run, multi-run', 'single-run');
+  cmdline.declareString('querymode', 'randomlist or xorshift', 'xorshift');
+  cmdline.declareString('filter', ' Map to use', '');
 
   timelimit := cmdline.readInt('timelimit');
-  memlimit := cmdline.readInt('memlimit');
+  memlimit := int64(cmdline.readInt('memlimit')) * 1024 * 1024;
 
   sourcefile := cmdline.readString('sources');
 
@@ -416,70 +471,92 @@ begin
       keycount := sources.count;
     writeln(stderr, 'Done loading sources');
   end;
+  mapFilter:= cmdline.readString('filter');
+  case cmdline.readString('mode') of
+    'list': runMode := rmList;
+    'single-run': runmode := rmSingleRun;
+    'multi-run': runmode := rmAddativeKeyCount;
+  end;
+  case cmdline.readString('querymode') of
+    'randomlsit': queryMode := qmFPCRandomQueryList;
+    'xorshift': querymode := qmXorShift;
+  end;
   cmdline.free;
 
-  SetLength(data, keycount);
-  fphashlist := TFPHashList.Create;
-  fphashlist.Capacity := keycount*2;
-  for i := 0 to keycount - 1 do begin
-    if sources <> nil then begin
-      oldptr := nil;
-      s := sources[i mod sources.count];
+  basekeycount := keycount;
+
+  repeat
+    SetLength(data, keycount);
+    fphashlist := TFPHashList.Create;
+    fphashlist.Capacity := keycount*2;
+    for i := 0 to keycount - 1 do begin
+      if sources <> nil then begin
+        oldptr := nil;
+        s := sources[i mod sources.count];
+      end;
+      repeat
+        if sources = nil then begin
+          setlength(s, keylen);
+          for j := 1 to keylen do
+            s[j] := chr(Random(200)+32);
+        end else if oldptr <> nil then
+          s := s + chr(Random(200)+32);
+        while length(s) < keylen do
+          s := s + chr(Random(200)+32);
+        oldptr := fphashlist.Find(s);
+        if oldptr = nil then break;
+        if PString(oldptr)^ <> s then fail;
+      until oldptr = nil;
+      data[i] := s;
+      fphashlist.Add(s, @data[i]);
     end;
-    repeat
-      if sources = nil then begin
-        setlength(s, keylen);
-        for j := 1 to keylen do
-          s[j] := chr(Random(200)+32);
-      end else if oldptr <> nil then
-        s := s + chr(Random(200)+32);
-      while length(s) < keylen do
-        s := s + chr(Random(200)+32);
-      oldptr := fphashlist.Find(s);
-      if oldptr = nil then break;
-      if PString(oldptr)^ <> s then fail;
-    until oldptr = nil;
-    data[i] := s;
-    fphashlist.Add(s, @data[i]);
-  end;
-  fphashlist.Free;
+    fphashlist.Free;
 
-  writeln(stderr, 'Data count: ', length(data));
+    writeln(stderr, 'Data count: ', length(data), ' ', sourcefile, ' keylen: ', keylen, ' read/write: ', queryperkey);
 
-  SetLength(randomqueries, keycount * queryperkey);
-  for i := 0 to keycount - 1 do
-    for j := 0 to queryperkey - 1 do
-      randomqueries[i * queryperkey + j] := Random(i);
+    if queryMode = qmFPCRandomQueryList then begin
+      SetLength(randomqueries, keycount * queryperkey);
+      for i := 0 to keycount - 1 do
+        for j := 0 to queryperkey - 1 do
+          randomqueries[i * queryperkey + j] := Random(i);
+    end;
+
+    benchmark(mkHash, 'contnrs.TFPHashList', 'shortstring -> pointer', @TTestFPHashList.test);
+    benchmark(mkHash, 'contnrs.TFPDataHashTable', 'string -> pointer', @TTestFPHashTable.test);
+    benchmark(mkHash, 'ghashmap.THashMap', '* -> *', @TTestGHashMap.test);
+    benchmark(mkTree, 'gmap.TMap', '* -> *', @TTestGMap.test);
+    benchmark(mkArray, 'fgl.TFPGMap (sorted)', '* -> *', @TTestFPGMap.test);
+    benchmark(mkArray, 'sysutils.TStringList_(sorted)', 'string -> TObject', @TTestStringList.test);
+    {$ifdef benchmarkIniFiles}benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);{$endif}
+    benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);
 
 
-  benchmark(mkHash, 'contnrs.TFPHashList', 'shortstring -> pointer', @testfphashlist);
-  benchmark(mkHash, 'contnrs.TFPDataHashTable', 'string -> pointer', @TTestFPHashTable.test);
-  benchmark(mkHash, 'ghashmap.THashMap', '* -> *', @TTestGHashMap.test);
-  benchmark(mkTree, 'gmap.TMap', '* -> *', @TTestGMap.test);
-  benchmark(mkArray, 'fgl.TFPGMap', '* -> *', @TTestFPGMap.test);
-  benchmark(mkArray, 'sysutils.TStringList_(sorted)', 'string -> TObject', @testStringList);
-  benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);
-  benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);
+    {$ifdef benchmarkGenerics}
+    benchmark(mkHash, 'rtl-generics_linear', '* -> *', @TTestGenericLinear.test);
+    benchmark(mkHash, 'rtl-generics_quadratic', '* -> *', @TTestGenericQuadratic.test);
+    benchmark(mkHash, 'rtl-generics_double', '* -> *', @TTestGenericDouble.test);
+    benchmark(mkHash, 'rtl-generics_cuckoo2', '* -> *', @TTestGenericCuckooD2.test);
+    benchmark(mkHash, 'rtl-generics_cuckoo4', '* -> *', @TTestGenericCuckooD4.test);
+    benchmark(mkHash, 'rtl-generics_cuckoo6', '* -> *', @TTestGenericCuckooD6.test);
+    {$endif}
+    {$ifdef benchmarkBEROsFLRE}benchmark(mkHash, 'Bero''s_TFLRECacheHashMap', 'string -> TFLRE', @TTestFLRE.test);{$endif}
+    {$ifdef benchmarkBEROsPASMP}benchmark(mkParallelHash, 'Bero''s_TPasMPHashTable', '* -> *', @TTestPasMPStringHashTable.test);{$endif}
+    {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap', '* -> *', @TTestGContnrs.test);{$endif}
+    {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s THashList (fixed size)', 'string -> pointer', @TTestBKHashList.test);{$endif}
+    {$ifdef benchmarkCL4L}benchmark(mkHash, 'CL4L''s_TStrHashMap (fixed size)', 'string -> TObject', @TTestCL4LStrHashMap.test);{$endif}
+    {$ifdef benchmarkFundamentals}benchmark(mkHash, 'fundamentals TPointerDictionaryA', 'string -> pointer', @TTestFundamentalsPointerDictionaryA.test);{$endif}
+    {$ifdef benchmarkLightContainers}benchmark(mkHash, 'marcov''s generic lightcontainers', '* -> *', @TTestLightContainers.test);{$endif}
+    {$ifdef benchmarkDeCAL}benchmark(mkHash, 'hovadur''s DeCAL ', '* -> *', @TTestDeCAL.test);{$endif}
+    {$ifdef benchmarkJUHAsStringHashMap}benchmark(mkHash, 'JUHA''s StringHashMap', 'string -> pointer', @TTestJuhaStrHashMap.test);{$endif}
+    {$ifdef benchmarkKEALONsCL4FPC}benchmark(mkHash, 'kealon''s CL4fpc', '* -> *', @TTestKealonsHashMap.test);{$endif}
 
 
-  {$ifdef benchmarkGenerics}
-  benchmark(mkHash, 'rtl-generics_linear', '* -> *', @TTestGenericLinear.test);
-  benchmark(mkHash, 'rtl-generics_quadratic', '* -> *', @TTestGenericQuadratic.test);
-  benchmark(mkHash, 'rtl-generics_double', '* -> *', @TTestGenericDouble.test);
-  benchmark(mkHash, 'rtl-generics_cuckoo2', '* -> *', @TTestGenericCuckooD2.test);
-  benchmark(mkHash, 'rtl-generics_cuckoo4', '* -> *', @TTestGenericCuckooD4.test);
-  benchmark(mkHash, 'rtl-generics_cuckoo6', '* -> *', @TTestGenericCuckooD6.test);
-  {$endif}
-  {$ifdef benchmarkBEROsFLRE}benchmark(mkHash, 'Bero''s_TFLRECacheHashMap', 'string -> TFLRE', @TTestFLRE.test);{$endif}
-  {$ifdef benchmarkBEROsPASMP}benchmark(mkParallelHash, 'Bero''s_TPasMPHashTable', '* -> *', @testPASMP);{$endif}
-  {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap', '* -> *', @TTestGContnrs.test);{$endif}
-  {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s THashList (fixed size)', 'string -> pointer', @testBKHashList);{$endif}
-  {$ifdef benchmarkCL4L}benchmark(mkHash, 'CL4L''s_TStrHashMap (fixed size)', 'string -> TObject', @TTestCL4LStrHashMap.test);{$endif}
-  {$ifdef benchmarkFundamentals}benchmark(mkHash, 'fundamentals TPointerDictionaryA', 'string -> pointer', @TTestFundamentalsPointerDictionaryA.test);{$endif}
-  {$ifdef benchmarkLightContainers}benchmark(mkHash, 'marcov''s generic lightcontainers', '* -> *', @TTestLightContainers.test);{$endif}
-  {$ifdef benchmarkDeCAL}benchmark(mkHash, 'hovadur''s DeCAL ', '* -> *', @TTestDeCAL.test);{$endif}
-  {$ifdef benchmarkJUHAsStringHashMap}benchmark(mkHash, 'JUHA''s StringHashMap', 'string -> pointer', @TTestJuhaStrHashMap.test);{$endif}
-  {$ifdef benchmarkKEALONsCL4FPC}benchmark(mkHash, 'kealon''s CL4fpc', '* -> *', @TTestKealonsHashMap.test);{$endif}
+    keycount := keycount + basekeycount;
+    if keycount > 10 * basekeycount then begin
+      keycount := 2 * 10 * basekeycount;
+      basekeycount := basekeycount * 10;
+    end;
+  until (runMode <> rmAddativeKeyCount) or (keycount < 0);
 
   sources.free;
 end.
