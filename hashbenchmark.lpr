@@ -43,9 +43,17 @@ uses
 type TMapKind = (mkHash, mkParallelHash, mkTree, mkArray);
      TBenchmarkFunc = function: TObject;
 
+procedure flushall;
+begin
+  flush(system.output);
+  flush(stderr);
+  flush(stderr);
+end;
+
 procedure fail;
 begin
   writeln(stderr, 'failed');
+  flushall();
   halt;
 end;
 
@@ -58,47 +66,59 @@ var data, faildata: array of string;
     mapFilter: string;
 
 function benchmarkf(kind: TMapKind; name: string; p: TBenchmarkFunc): boolean;
-const repcount = 5;
+const repcount = 1;
 var
   r: Integer;
-  tms, mean, meanmemory: double;
+  tms: TDateTime;
+  mean, meanmemory: int64;
   std, stdmemory: int64;
-  timing: array[1..repcount] of double;
+  timing: array[1..repcount] of int64;
   m: TMemoryManager;
-  memory: array[1..repcount] of double;
-  heapstatus: THeapStatus;
+  memory: array[1..repcount] of int64;
+  heapstatus: TFPCHeapStatus;
   map: tobject;
 begin
   result := false;
   GetMemoryManager(m);
   mean := 0;
   meanmemory := 0;
+  result := true;
   for r := 1 to repcount do begin
-    heapstatus := m.GetHeapStatus();
+    heapstatus := m.GetFPCHeapStatus();
     tms := now;
     map := p();
-    timing[r] := (now - tms)*MSecsPerDay;
-    memory[r] := m.GetHeapStatus().totalAllocated - heapstatus.totalAllocated;
+    timing[r] := round((now - tms)*MSecsPerDay);
+    memory[r] := m.GetFPCHeapStatus().CurrHeapUsed - heapstatus.CurrHeapUsed;
     map.free;
     if timing[r] > timelimit then begin
       writeln(stderr, name, ' time limit exceeded: ', round(timing[r]), ' > ', timelimit);
-      exit;
+      flushall;
+      result := false;
+      if r <> repcount then exit;
     end;
     if memory[r] > memlimit then begin
       writeln(stderr, name, ' memory limit exceeded: ', round(memory[r]), ' > ', memlimit);
-      exit;
+      flushall;
+      result := false;
+      if r <> repcount then exit;
     end;
     ClearExceptions();
     mean += timing[r];
     meanmemory += memory[r];
 
   end;
-  mean /= repcount;
-  meanmemory /= repcount;
-  std := round(stddev(pdouble(@timing[1]), repcount));
-  stdmemory := round(stddev(pdouble(@memory[1]), repcount));
-  writeln(name, ' ', keycount, ' ', round(mean), ' +- ', std, ' ', round(meanmemory), ' +- ',  stdmemory);
-  result := true;
+  std := 0;
+  stdmemory := 0;
+  if repcount > 1 then begin
+    mean := round(mean / repcount);
+    meanmemory := round(meanmemory / repcount);
+    //writeln('t',timing[1],' ',timing[2],' ',timing[3]);
+    //writeln('m',memory[1],' ',memory[2],' ',memory[3]);
+    //std := round(stddev(pdouble(@timing[1]), repcount)); //sometimes this does not work (ofc it was a double array before). sqrt fail? Negative variance? Either the FPU is in an invalid state from one of the maps, or casting double to extended rounds in the wrong direction.
+    //stdmemory := round(stddev(pdouble(@memory[1]), repcount));
+  end;
+  writeln(name, ' ', keycount, ' ', mean, ' +- ', std, ' ', meanmemory, ' +- ',  stdmemory);
+  flushall;
 end;
 
 procedure benchmark(kind: TMapKind; name: string; args: string; p: TBenchmarkFunc);
@@ -503,6 +523,7 @@ var
   i, j, basekeycount: Integer;
   fphashlist: TFPHashList;
   oldptr: Pointer;
+  addkeycount, oldkeycount, oldfailkeycount: integer;
 
   dumpfile : tstringlist;
 
@@ -566,7 +587,10 @@ begin
 
   basekeycount := keycount;
 
+  data := nil;
+  faildata := nil;
 
+  fphashlist := TFPHashList.Create;
   repeat
     if failqueryperkey > 0 then failkeycount := max(100, keycount div 100)
     else failkeycount := 0;
@@ -575,11 +599,17 @@ begin
     oldptr := nil; //for warnings
     s := '';
 
+    oldkeycount := length(data);
+    oldfailkeycount := length(faildata);
     SetLength(data, keycount);
     SetLength(faildata, failkeycount);
-    fphashlist := TFPHashList.Create;
-    fphashlist.Capacity := keycount*2;
-    for i := 0 to keycount + failkeycount - 1 do begin
+    if fphashlist.Capacity < keycount + failkeycount then
+      if fphashlist.Capacity < 1000000 then
+        fphashlist.Capacity := (keycount + failkeycount) * 5
+       else
+         fphashlist.Capacity := keycount + failkeycount;
+    addkeycount := keycount - oldkeycount;
+    for i := 0 to keycount + failkeycount - 1 - oldkeycount - oldfailkeycount do begin
       if sources <> nil then
         s := sources[i mod sources.count];
       repeat
@@ -593,19 +623,19 @@ begin
           s := s + chr(Random(200)+32);
         oldptr := fphashlist.Find(s);
         if oldptr = nil then break;
-        if PString(oldptr)^ <> s then fail;
+        //if PString(oldptr)^ <> s then fail;
       until oldptr = nil;
-      if i < keycount then begin
-        data[i] := s;
-        fphashlist.Add(s, @data[i]);
+      if i < addkeycount then begin
+        data[i + oldkeycount] := s;
+        fphashlist.Add(s, @data[i]); //these added pointers will become invalid after resizing
       end else begin
-        faildata[i - keycount] := s;
-        fphashlist.Add(s, @faildata[i - keycount]);
+        faildata[i - addkeycount + oldfailkeycount] := s;
+        fphashlist.Add(s, @faildata[i - addkeycount]);
       end;
     end;
-    fphashlist.Free;
 
     writeln(stderr, 'Data count: ', length(data), ' ', sourcefile, ' keylen: ', keylen, ' read/write: ', queryperkey, ' fail/write: ', failqueryperkey);
+    flushall;
 
     if dumpdatafn <> '' then begin
       dumpfile := tstringlist.create;
@@ -663,6 +693,7 @@ begin
     end;
   until (runMode <> rmAddativeKeyCount) or (keycount < 0);
 
+  fphashlist.Free;
   sources.free;
 end.
 

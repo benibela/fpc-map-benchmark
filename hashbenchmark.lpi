@@ -23,6 +23,7 @@
     <RunParams>
       <local>
         <FormatVersion Value="1"/>
+        <CommandLineParams Value="--keycount 10 --mode=multi-run"/>
       </local>
     </RunParams>
     <RequiredPackages Count="1">
