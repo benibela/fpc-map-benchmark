@@ -15,12 +15,15 @@ fi
 dics="$dicpath/de_DE.dic:$dicpath/en_US.dic"
 
 echo "::" $1 $options
-readslist="0 1 20 1000"
+failslist="0 1 100"
+readslist="0 1 20 100"
 lenlist="4 32 200"
-for reads in $readslist; do
-  echo ./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=10 --memlimit=4096 results/$1.$reads.dics
-  for len in $lenlist; do
-    echo ./hashbenchmark --filter=$1 --mode=multi-run --keycount=10 --keylen=4 --memlimit=4096 results/$1.$reads.$len
-  done
-done
+for fails in $failslist; do
+ for reads in $readslist; do
+   echo ./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=10 --memlimit=4096 results/$1.$reads.$fails.dics
+   for len in $lenlist; do
+     echo ./hashbenchmark --filter=$1 --mode=multi-run --keycount=10 --keylen=4 --memlimit=4096 results/$1.$reads.$fails.$len
+   done
+ done
+done;
 #
