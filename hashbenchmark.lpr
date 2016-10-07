@@ -17,6 +17,11 @@ program hashbenchmark;
 {$define benchmarkJUHAsStringHashMap}
 //{$define benchmarkKEALONsCL4FPC} conflicts with benchmarkCL4L as you cannot access generic hashmap when unit hashmap is used (#30646)
 
+{$ifdef benchmarkGenerics}
+{$define referenceIsTheSixthCuckooOnTheSky}
+{$endif}
+
+
 uses
   //heaptrc,
   {$IFDEF UNIX}{$IFDEF UseCThreads}
@@ -518,11 +523,22 @@ begin
   result := rawhash(s) and (n - 1);
 end;
 
+
+{$ifdef referenceIsTheSixthCuckooOnTheSky}
+type TReferenceHashmap = specialize TCuckooD6<string, pointer>;
+  TReferenceHashmapAdd = specialize TG_CallAdd<TReferenceHashmap>;
+  TReferenceHashmapContains = specialize TG_CallContainsKey<TReferenceHashmap>;
+{$else}
+type TReferenceHashmap = TFPHashList;
+  TReferenceHashmapAdd = specialize TG_CallAdd<TReferenceHashmap>;
+  TReferenceHashmapContains = specialize TG_CallContainsGetNil<TFPHashList, specialize TG_CallGetFind<TFPHashList> >;
+{$endif}
+
 var
   s: string;
   i, j, basekeycount: Integer;
-  fphashlist: TFPHashList;
-  oldptr: Pointer;
+  referenceHashmap: TReferenceHashmap;
+  referenceConflict: boolean;
   addkeycount, oldkeycount, oldfailkeycount: integer;
 
   dumpfile : tstringlist;
@@ -590,24 +606,24 @@ begin
   data := nil;
   faildata := nil;
 
-  fphashlist := TFPHashList.Create;
+  referenceHashmap := TReferenceHashmap.create;
   repeat
     if failqueryperkey > 0 then failkeycount := max(100, keycount div 100)
     else failkeycount := 0;
     //if keycount > 2000 then break;
 
-    oldptr := nil; //for warnings
+    referenceConflict := false; //for warnings
     s := '';
 
     oldkeycount := length(data);
     oldfailkeycount := length(faildata);
     SetLength(data, keycount);
     SetLength(faildata, failkeycount);
-    if fphashlist.Capacity < keycount + failkeycount then
-      if fphashlist.Capacity < 1000000 then
-        fphashlist.Capacity := (keycount + failkeycount) * 5
+    if referenceHashmap.Capacity < keycount + failkeycount then
+      if referenceHashmap.Capacity < 1000000 then
+        referenceHashmap.Capacity := (keycount + failkeycount) * 5
        else
-         fphashlist.Capacity := keycount + failkeycount;
+         referenceHashmap.Capacity := keycount + failkeycount;
     addkeycount := keycount - oldkeycount;
     for i := 0 to keycount + failkeycount - 1 - oldkeycount - oldfailkeycount do begin
       if sources <> nil then
@@ -617,20 +633,18 @@ begin
           setlength(s, keylen);
           for j := 1 to keylen do
             s[j] := chr(Random(200)+32);
-        end else if oldptr <> nil then
+        end else if referenceConflict then
           s := s + chr(Random(200)+32);
         while length(s) < keylen do
           s := s + chr(Random(200)+32);
-        oldptr := fphashlist.Find(s);
-        if oldptr = nil then break;
-        //if PString(oldptr)^ <> s then fail;
-      until oldptr = nil;
+        referenceConflict := TReferenceHashmapContains.contains(referenceHashmap, s);
+      until not referenceConflict;
       if i < addkeycount then begin
         data[i + oldkeycount] := s;
-        fphashlist.Add(s, @data[i]); //these added pointers will become invalid after resizing
+        TReferenceHashmapAdd.add(referenceHashmap, s, @data[i]); //these added pointers will become invalid after resizing
       end else begin
         faildata[i - addkeycount + oldfailkeycount] := s;
-        fphashlist.Add(s, @faildata[i - addkeycount]);
+        TReferenceHashmapAdd.add(referenceHashmap, s, @faildata[i - addkeycount]);
       end;
     end;
 
@@ -693,7 +707,7 @@ begin
     end;
   until (runMode <> rmAddativeKeyCount) or (keycount < 0);
 
-  fphashlist.Free;
+  referenceHashmap.Free;
   sources.free;
 end.
 
