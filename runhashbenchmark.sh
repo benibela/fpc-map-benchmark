@@ -1,5 +1,22 @@
 #!/bin/bash
 if [[ -z "$1" ]]; then
+  mkdir /tmp/hashmarkcache
+
+  if [[ ! -f /tmp/hashmarkcache/dics ]]; then 
+    if [[ -d /usr/share/hunspell/ ]]; then dicpath=/usr/share/hunspell/; 
+    elif [[ -d /usr/share/myspell/ ]]; then dicpath=/usr/share/myspell/;
+    else echo no dics; exit;
+    fi
+    dics="$dicpath/de_DE.dic:$dicpath/en_US.dic"
+    ./hashbenchmark --sources=$dics  --keycount=100000 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/dics
+  fi
+  if [[ ! -f /tmp/hashmarkcache/200 ]]; then 
+    ./hashbenchmark --keylen=200  --keycount=100000 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
+  fi
+  if [[ ! -f /tmp/hashmarkcache/8 ]]; then 
+    ./hashbenchmark --keylen=8  --keycount=100000 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
+  fi
+
   mkdir results
   ./hashbenchmark --mode=list | while read map; do
     ./runhashbenchmark.sh "$map"
@@ -8,11 +25,6 @@ if [[ -z "$1" ]]; then
 fi;
 
 
-if [[ -d /usr/share/hunspell/ ]]; then dicpath=/usr/share/hunspell/; 
-elif [[ -d /usr/share/myspell/ ]]; then dicpath=/usr/share/myspell/;
-else echo no dics; exit;
-fi
-dics="$dicpath/de_DE.dic:$dicpath/en_US.dic"
 
 
 ./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 0 --failqueriesperkey 0 > results/$1.dics.0.0

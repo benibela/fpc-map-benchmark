@@ -67,7 +67,7 @@ var data, faildata: array of string;
     keycount, failkeycount, keylen, queryperkey, failqueryperkey: integer;
     timelimit, memlimit: int64;
     queryMode: (qmFPCRandomQueryList, qmXorShift);
-    runMode: (rmList, rmSingleRun, rmAddativeKeyCount);
+    runMode: (rmList, rmDumpData, rmSingleRun, rmAddativeKeyCount);
     mapFilter: string;
 
 function benchmarkf(kind: TMapKind; name: string; p: TBenchmarkFunc): boolean;
@@ -136,6 +136,7 @@ begin
       writeln(name);
       exit;
     end;
+    rmDumpData: exit;
     rmSingleRun: if mapfilter = '' then begin
       if (kind = mkArray) and (keycount > 10000) then exit;
       if (kind = mkTree) and (keycount > 100000) then exit;
@@ -541,7 +542,7 @@ var
   referenceConflict: boolean;
   addkeycount, oldkeycount, oldfailkeycount: integer;
 
-  dumpfile : tstringlist;
+  dumpfile : textfile;
 
   cmdline: TCommandLineReader;
   temps, sourcefile, dumpdatafn: string;
@@ -591,6 +592,7 @@ begin
   mapFilter:= cmdline.readString('filter');
   case cmdline.readString('mode') of
     'list': runMode := rmList;
+    'dumpdata': runMode := rmDumpData;
     'multi-run': runmode := rmAddativeKeyCount;
     else {'single-run': }runmode := rmSingleRun;
   end;
@@ -599,7 +601,12 @@ begin
     else {'xorshift': }querymode := qmXorShift;
   end;
   dumpdatafn := cmdline.readString('dumpdata');
+  if dumpdatafn <> '' then begin
+    assignfile(dumpfile, dumpdatafn);
+    rewrite(dumpfile);
+  end;
   cmdline.free;
+
 
   basekeycount := keycount;
 
@@ -615,9 +622,10 @@ begin
     referenceConflict := false; //for warnings
     s := '';
 
-    oldkeycount := length(data);
+    if runMode = rmDumpData then oldkeycount := 0
+    else oldkeycount := length(data);
+    if length(data) <> keycount then SetLength(data, keycount);
     oldfailkeycount := length(faildata);
-    SetLength(data, keycount);
     SetLength(faildata, failkeycount);
     if referenceHashmap.Capacity < keycount + failkeycount then
       if referenceHashmap.Capacity < 1000000 then
@@ -652,12 +660,10 @@ begin
     flushall;
 
     if dumpdatafn <> '' then begin
-      dumpfile := tstringlist.create;
-      dumpfile.capacity := keycount;
+      if runMode <> rmDumpData then rewrite(dumpfile);
       for i := 0 to keycount - 1 do
-        dumpfile.add(data[i]);
-      dumpfile.savetofile(dumpdatafn);
-      dumpfile.free;
+        writeln(dumpfile, data[i]);
+      flush(dumpfile);
     end;
 
     if queryMode = qmFPCRandomQueryList then begin
@@ -699,13 +705,14 @@ begin
     {$ifdef benchmarkJUHAsStringHashMap}benchmark(mkHash, 'JUHA''s StringHashMap', 'string -> pointer', @TTestJuhaStrHashMap.test);{$endif}
     {$ifdef benchmarkKEALONsCL4FPC}benchmark(mkHash, 'kealon''s CL4fpc', '* -> *', @TTestKealonsHashMap.test);{$endif}
 
-
-    keycount := keycount + basekeycount;
-    if keycount > 10 * basekeycount then begin
-      keycount := 2 * 10 * basekeycount;
-      basekeycount := basekeycount * 10;
+    if runMode <> rmDumpData then begin
+      keycount := keycount + basekeycount;
+      if keycount > 10 * basekeycount then begin
+        keycount := 2 * 10 * basekeycount;
+        basekeycount := basekeycount * 10;
+      end;
     end;
-  until (runMode <> rmAddativeKeyCount) or (keycount < 0);
+  until (runMode in [rmList, rmSingleRun]) or (keycount < 0);
 
   referenceHashmap.Free;
   sources.free;
