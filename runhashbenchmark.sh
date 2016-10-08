@@ -8,14 +8,14 @@ if [[ -z "$1" ]]; then
     else echo no dics; exit;
     fi
     dics="$dicpath/de_DE.dic:$dicpath/en_US.dic"
-    ./hashbenchmark --sources=$dics  --keycount=100000 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/dics
+    ./hashbenchmark --sources=$dics  --keycount=100000 --failqueryperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/dics
   fi
   if [[ ! -f /tmp/hashmarkcache/200 ]]; then 
-    ./hashbenchmark --keylen=200  --keycount=100000 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
+    ./hashbenchmark --keylen=200  --keycount=100000 --failqueryperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
   fi
   if [[ ! -f /tmp/hashmarkcache/8 ]]; then 
-    ./hashbenchmark --keylen=8  --keycount=100000 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
-  fi
+    ./hashbenchmark --keylen=8  --keycount=100000 --failqueryperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/8
+  fi	
 
   mkdir results
   ./hashbenchmark --mode=list | while read map; do

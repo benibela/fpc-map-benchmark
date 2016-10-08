@@ -542,14 +542,15 @@ var
   referenceConflict: boolean;
   addkeycount, oldkeycount, oldfailkeycount: integer;
 
-  dumpfile : textfile;
+  dumpfile, cacheddata : textfile;
 
   cmdline: TCommandLineReader;
-  temps, sourcefile, dumpdatafn: string;
+  temps, sourcefile, dumpdatafn, cacheddatafn: string;
   sources,sources2: tstringlist;
 begin
   cmdline := TCommandLineReader.create;
   cmdline.declareString('sources', 'Source file');
+  cmdline.declareString('cacheddata', 'Source file without duplicate lines', '');
   cmdline.declareInt('keycount', 'keycount', 0);
   cmdline.declareInt('keylen', 'keylen', 0);
   cmdline.declareInt('queriesperkey', 'queryperkey', 100);
@@ -605,6 +606,12 @@ begin
     assignfile(dumpfile, dumpdatafn);
     rewrite(dumpfile);
   end;
+  cacheddatafn := cmdline.readString('cacheddata');
+  if cacheddatafn <> '' then begin
+    assignfile(cacheddata, cacheddatafn);
+    reset(cacheddata);
+  end;
+
   cmdline.free;
 
 
@@ -613,7 +620,8 @@ begin
   data := nil;
   faildata := nil;
 
-  referenceHashmap := TReferenceHashmap.create;
+  if cacheddatafn = '' then referenceHashmap := TReferenceHashmap.create
+  else referenceHashmap := nil;
   repeat
     if failqueryperkey > 0 then failkeycount := max(100, keycount div 100)
     else failkeycount := 0;
@@ -627,33 +635,41 @@ begin
     if length(data) <> keycount then SetLength(data, keycount);
     oldfailkeycount := length(faildata);
     SetLength(faildata, failkeycount);
-    if referenceHashmap.Capacity < keycount + failkeycount then
-      if referenceHashmap.Capacity < 1000000 then
-        referenceHashmap.Capacity := (keycount + failkeycount) * 5
-       else
-         referenceHashmap.Capacity := keycount + failkeycount;
     addkeycount := keycount - oldkeycount;
-    for i := 0 to keycount + failkeycount - 1 - oldkeycount - oldfailkeycount do begin
-      if sources <> nil then
-        s := sources[i mod sources.count];
-      repeat
-        if sources = nil then begin
-          setlength(s, keylen);
-          for j := 1 to keylen do
-            s[j] := chr(Random(200)+32);
-        end else if referenceConflict then
-          s := s + chr(Random(200)+32);
-        while length(s) < keylen do
-          s := s + chr(Random(200)+32);
-        referenceConflict := TReferenceHashmapContains.contains(referenceHashmap, s);
-      until not referenceConflict;
-      if i < addkeycount then begin
-        data[i + oldkeycount] := s;
-        TReferenceHashmapAdd.add(referenceHashmap, s, @data[i]); //these added pointers will become invalid after resizing
-      end else begin
-        faildata[i - addkeycount + oldfailkeycount] := s;
-        TReferenceHashmapAdd.add(referenceHashmap, s, @faildata[i - addkeycount]);
+    //writeln(addkeycount, ' ', oldkeycount);
+    if referenceHashmap <> nil then begin
+      if (runMode <> rmDumpData) and (referenceHashmap.Capacity < keycount + failkeycount) then
+        if  (referenceHashmap.Capacity < 1000000) then
+          referenceHashmap.Capacity := (keycount + failkeycount) * 5
+         else
+           referenceHashmap.Capacity := keycount + failkeycount;
+      for i := 0 to keycount + failkeycount - 1 - oldkeycount - oldfailkeycount do begin
+        if sources <> nil then
+          s := sources[i mod sources.count];
+        repeat
+          if sources = nil then begin
+            setlength(s, keylen);
+            for j := 1 to keylen do
+              s[j] := chr(Random(200)+32);
+          end else if referenceConflict then
+            s := s + chr(Random(200)+32);
+          while length(s) < keylen do
+            s := s + chr(Random(200)+32);
+          referenceConflict := TReferenceHashmapContains.contains(referenceHashmap, s);
+        until not referenceConflict;
+        if i < addkeycount then begin
+          data[i + oldkeycount] := s;
+          TReferenceHashmapAdd.add(referenceHashmap, s, @data[i]); //these added pointers will become invalid after resizing
+        end else begin
+          faildata[i - addkeycount + oldfailkeycount] := s;
+          TReferenceHashmapAdd.add(referenceHashmap, s, @faildata[i - addkeycount]);
+        end;
       end;
+    end else begin
+      for i := 0 to keycount - oldkeycount - 1 do
+        readln(cacheddata, data[i + oldkeycount]);
+      for i := 0 to failkeycount - oldfailkeycount - 1 do
+        readln(cacheddata, faildata[i + oldfailkeycount]);
     end;
 
     writeln(stderr, 'Data count: ', length(data), ' ', sourcefile, ' keylen: ', keylen, ' read/write: ', queryperkey, ' fail/write: ', failqueryperkey);
