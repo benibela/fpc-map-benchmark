@@ -18,7 +18,7 @@ cat <<EOF
        if [[ $unit != $lastunit ]]; then echo '<br>'; fi
        lastunit=$unit;
        if [[ $map =~ contnrs|ghashmap|gmap|rtl-generic ]] && [[ ! $map =~ shortstring ]]; then checked="checked"; else checked=""; fi
-       echo '<input type="checkbox" name="map_'$map'" '$checked'>'$(tr _ ' ' <<<"$map")'</input>  ';
+       echo '<input type="checkbox" name="map_'$map'" '$checked'>'$(tr _ ' ' <<<"$map");
      done )
      
      <p><b>Datasets:</b> 
@@ -26,11 +26,12 @@ cat <<EOF
      <input type="checkbox"  name="ds_8"> Short (8) random keys
      <input type="checkbox"  name="ds_200"> Long (200) random keys
      
-     <p><b>Model:</b> 
-     <input type="checkbox"  name="model_1_0_0"> Only writes
-     <input type="checkbox"  name="model_1_3_3" checked> Writes/Balanced Reads (1,3,3)
-     <input type="checkbox"  name="model_1_20_2">Writes/Many Reads/Failed Lookups (1,20,2)
-     <input type="checkbox"  name="model_1_2_20">Writes/Reads/Many Failed Lookups (1,2,20)
+     <p><b>Model:</b> <sup>(writes,succeeding lookups,failed lookups)</sup>
+     <input type="checkbox"  name="model_1_0_0">Only writes <sup>(1,0,0)</sup>
+     <input type="checkbox"  name="model_1_3_3" checked> Balanced <sup>(1,3,3)</sup>
+     <input type="checkbox"  name="model_1_20_2">Many Reads <sup>(1,20,2)</sup>
+     <input type="checkbox"  name="model_1_2_20">Many Failed Lookups <sup>(1,2,20)</sup>
+     <input type="checkbox"  name="model_pred">Custom prediction: <input id="pred_write" value="1" size=5 oninput="regen()">, <input id="pred_read" value="100" size=5 oninput="regen()">, <input id="pred_fail" value="100" size="5" oninput="regen()">
 
      <p><b>Metric:</b> 
      <input type="checkbox"  name="metric_0"> absolute time (ms)
@@ -61,7 +62,7 @@ EOF
 
 
 resultpath=/tmp/results
-echo 'var data = ['
+echo 'var rawdata = ['
 for res in $resultpath/*; do #*/
   [[ ${res#$resultpath/} =~ (.*)[.](.*)[.](.*)[.](.*) ]]
   name=${BASH_REMATCH[1]}
@@ -69,14 +70,32 @@ for res in $resultpath/*; do #*/
   queriesperkey=${BASH_REMATCH[3]}
   failqueriesperkey=${BASH_REMATCH[4]}
   echo '{"map": "'$name'", "source": "'$source'", "queriesperkey": '$queriesperkey', "failqueriesperkey": '$failqueriesperkey', '
-  echo '"data": ['
-  cut  $res -f 2,3,6 -d' ' | sed -Ee 's/^([0-9]+) +([0-9]+) +([0-9]+)/{x: \1, t: \2, m: \3},/'
+  echo '"rawdata": ['
+  cut  $res -f 2,3,6 -d' ' | sed -Ee 's/^([0-9]+) +([0-9]+) +([0-9]+)/\1,\2,\3,/' | tr -d '\n'
   echo ']},'
 done
 echo '];'
 
-
 cat <<EOF
+  var data = {};
+  for (var i=0;i<rawdata.length;i++) {
+    var row = rawdata[i];
+    if (!data[row.map]) data[row.map] = {};
+    if (!data[row.map][row.source]) data[row.map][row.source] = {};
+    if (!data[row.map][row.source][row.queriesperkey]) data[row.map][row.source][row.queriesperkey] = {};
+    //if (!data[row.map][row.source][row.queriesperkey][row.failqueriesperkey]) data[row.map][row.source][row.queriesperkey][row.failqueriesperkey] = [];
+    var newdata = [];
+    for (var j=0;j<row.rawdata.length;j+=3) {
+      if (newdata.length > 0 && newdata[newdata.length - 1].x == row.rawdata[j] ) {
+        newdata[newdata.length - 1].t = (newdata[newdata.length - 1].t + row.rawdata[j+1]) / 2;
+        newdata[newdata.length - 1].m = (newdata[newdata.length - 1].m + row.rawdata[j+2]) / 2;
+      } else 
+        newdata.push({x: row.rawdata[j], t: row.rawdata[j+1], m:row.rawdata[j+2]});
+    }
+    data[row.map][row.source][row.queriesperkey][row.failqueriesperkey] = newdata;
+  }
+
+
   var metricKeysLabel = "keys";
   var metricMemoryLabel = "memory (bytes)";
   var metricTimeLabel = "time (ms)";
@@ -89,7 +108,7 @@ cat <<EOF
     "memory , time (bottom left is best)",   metricMemoryLabel, metricTimeLabel, function(d){ return {x: d.m, y:  d.t, k: d.x} },
     "time / memory",   metricMemoryLabel, "", function(d){ return {x: d.m, y:  d.t / Math.max(1,d.m), k: d.x} },
     "memory / time",   metricTimeLabel,   "", function(d){ return {x: d.t, y:  d.m / Math.max(1,d.t), k: d.x} },
-    "time / keysc (lower is better)",     metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.t / Math.max(1,d.x), k: d.x} },
+    "time / keys (lower is better)",     metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.t / Math.max(1,d.x), k: d.x} },
     "memory / keys (lower is better)",   metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.m / Math.max(1,d.x), k: d.x} },
   ];
   
@@ -125,7 +144,7 @@ cat <<EOF
   var mapInCat = [0,0,0,0]
   var colors = {};
   var oldcharts = [];
-  data.map(function(d){
+  rawdata.map(function(d){
       if (d.map in colors) return;
       var cat;
       if (/contnrs.TFP|ghashmap|lazfglhash/.test(d.map)) cat = 0;
@@ -151,14 +170,23 @@ cat <<EOF
     }
     
     
-    var activemaps = {};
-    chosenoption("map_", function(map) { activemaps[map] = true; });
+    var activemaps = [];
+    chosenoption("map_", function(map) { activemaps.push(map); });
     
     chosenoption("ds_", function(source, sourcetext){
     chosenoption("model_", function(model, modeltext){
-      var tmpregex = /([0-9]+)_([0-9]+)$/.exec(model);
-      var queriesperkey = tmpregex[1];
-      var failqueriesperkey = tmpregex[2];
+      var writes = 1;
+      var queriesperkey;
+      var failqueriesperkey;
+      if (model != "pred") {
+        var tmpregex = /([0-9]+)_([0-9]+)$/.exec(model);
+        queriesperkey = tmpregex[1];
+        failqueriesperkey = tmpregex[2];
+      } else {
+        writes = document.getElementById("pred_write").value*1;
+        queriesperkey = document.getElementById("pred_read").value*1;
+        failqueriesperkey = document.getElementById("pred_fail").value*1;
+      }
     chosenoption("metric_", function(metric, metrictext){
       var metricf = metrics[metric * 4 + 3];
     chosenoption("xaxis_", function(xaxis, xaxistext){
@@ -170,25 +198,80 @@ cat <<EOF
     var datasets = [];
     var basedatasets = [];
     var basedatasetsoffset = [];
-    for (var i=0;i<data.length;i++) {
-      if (activemaps[data[i].map] && data[i].source == source && data[i].queriesperkey == queriesperkey && data[i].failqueriesperkey == failqueriesperkey) {
-         basedatasets.push(data[i]);
-         basedatasetsoffset.push(0);
-         var newdata = [];
-         for (var j=0;j<data[i].data.length;j++) {
-           if (data[i].data[j].x < key_min ) basedatasetsoffset[basedatasetsoffset.length-1] = j + 1;
-           else if (data[i].data[j].x > key_max ) break;
-           else newdata.push(metricf(data[i].data[j]));
-         }
-         datasets.push( {
-             label: data[i].map,
-             data: newdata,
-             fill: false,
-             fill: false,
-             borderWidth: 3,
-             borderColor: colors[data[i].map]
-         } );
+    for (var i=0;i<activemaps.length;i++) {
+      row = data[activemaps[i]];
+      if (!row) continue;
+      row = row[source];
+      if (!row) continue;
+      if (model != "pred") {
+        row = row[queriesperkey];
+        if (!row) continue;
+        row = row[failqueriesperkey];
+        if (!row) continue;        
+      } else {
+        if (!row._predcache) {
+          if (!row[0] || !row[0][0] || !row[3] || !row[3][3] || !row[20] || !row[20][2] || !row[2] || !row[2][20] ) continue;
+          var r0_0 = row[0][0];
+          var r3_3 = row[3][3];
+          var r2_20 = row[2][20];
+          var r20_2 = row[20][2];
+          var minlength = Math.min(Math.min(r0_0.length, r3_3.length), Math.min(r20_2.length, r2_20.length));
+          var ok = true;
+          for (var j=0;j<minlength;j++) if (r0_0[j].x != r3_3[j].x || r0_0[j].x != r2_20[j].x || r0_0[j].x != r20_2[j].x) {
+            console.log(data[activemaps[i]]);
+            alert("fail: " + activemaps[i] + " " +j+ " other runs do not have "+r0_0[j].x+" keys");
+            ok = false;
+            break;
+          }
+          if (!ok) continue;
+          row._predcache = [];
+          for (var j=0;j<minlength;j++) {
+            var a = r0_0[j].t; var b = r3_3[j].t; var c = r20_2[j].t; var d = r2_20[j].t;
+            //Pseudo inverse of [1,0,0; 1,3,3; 1,20,2; 1,2,20]'
+            var subtiming = [
+             0.662269 * a + 0.46438 * b - 0.063325 * c - 0.063325 * d,
+            -0.032982 * a - 0.01715 * b + 0.052844 * c - 0.002712 * d,
+            -0.032982 * a - 0.01715 * b - 0.002712 * c + 0.052844 * d
+            ];
+            if (subtiming[0] < 0) subtiming[0] = 0; //some maps work as time machine
+            if (subtiming[1] < 0) subtiming[1] = 0;
+            if (subtiming[2] < 0) subtiming[2] = 0;
+            row._predcache.push(subtiming);
+          }
+        }
+        if (!row._predcache) continue;
+        var predcache = row._predcache;
+        var r0_0 = row[0][0];
+        if (!row[queriesperkey]) row[queriesperkey] = {};
+        row = row[queriesperkey];
+        if (!row[failqueriesperkey]) {
+          var newarray = [];
+          for (var j=0;j<predcache.length;j++) 
+            newarray.push({
+              x: r0_0[j].x, m: r0_0[j].m,
+              t: Math.max(1, writes * predcache[j][0] + queriesperkey * predcache[j][1] + failqueriesperkey * predcache[j][2])
+            })
+          row[failqueriesperkey] = newarray;
+        }
+        row = row[failqueriesperkey];
       }
+      
+      basedatasets.push(row);
+      basedatasetsoffset.push(0);
+      var newdata = [];
+      for (var j=0;j<row.length;j++) {
+        if (row[j].x < key_min ) basedatasetsoffset[basedatasetsoffset.length-1] = j + 1;
+        else if (row[j].x > key_max ) break;
+        else newdata.push(metricf(row[j]));
+      }
+      datasets.push( {
+         label: activemaps[i],
+         data: newdata,
+         fill: false,
+         fill: false,
+         borderWidth: 3,
+         borderColor: colors[activemaps[i]]
+      } );
     }
     
     var ctx = document.createElement("canvas")
@@ -214,13 +297,13 @@ cat <<EOF
             },
          title: {
                     display: true,
-                    text: sourcetext + " " + modeltext + " " + metrics[metric*4],
+                    text: sourcetext + " " + modeltext + (model == "pred" ? "estimate for " + writes+","+queriesperkey+","+failqueriesperkey:"") + " " + metrics[metric*4],
                     titleFontColor: "black"
                 },
           tooltips: {callbacks: {
             afterLabel: function(ti){
-             // console.log		(data.toSource())
-              var p = basedatasets[ti.datasetIndex].data[ti.index + basedatasetsoffset[ti.datasetIndex]];
+             // console.log 	(data.toSource())
+              var p = basedatasets[ti.datasetIndex][ti.index + basedatasetsoffset[ti.datasetIndex]];
               return prettyCount(p.x) + " keys, " + prettyTime(p.t)+ ", "+prettyMem(p.m);
             }}}
         }
@@ -248,7 +331,7 @@ cat <<EOF
   
   <h4>Good built-in maps:</h4>
   <ul>
-  <li>For small keys, TFPHashList is the fastest map of all maps provided by FreePascal. However, for longer keys or many lookups the performances degrades drastically. It uses shortstrings, so there is a hard-limit of 256 byte keys, and it seems to copy all strings, as its memory usage is very low for small keys, but also increases drastically with the key length. </li>
+  <li>For small keys, TFPHashList is the fastest map of all maps provided by FreePascal. However, for longer keys or dozens of lookups the performances degrades drastically. It uses shortstrings, so there is a hard-limit of 256 byte keys (), and it seems to copy all strings, as its memory usage is very low for small keys, but also increases drastically with the key length. </li>
   
   <li>The non-cuckoo maps of the rtl-generic.collections package, i.e. linear and double hashing maps, are more generic, use slightly less memory and are slightly slower for shorter keys, but faster than TFPHashList for longer keys. The linear map appears to be slightly faster than the double hashing one, when the keys are truly random.  </li>
   
