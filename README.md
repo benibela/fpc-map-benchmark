@@ -1,7 +1,7 @@
 Free Pascal hash maps
 ======================
 
-This repository contains the source need to run a benchmark of string-key based (hash)maps available for Free Pascal. 
+This repository contains the source needed to run a benchmark of string-key based (hash)maps available for Free Pascal. 
 
 See http://www.benibela.de/fpc-map-benchmark_en.html for the results.
 

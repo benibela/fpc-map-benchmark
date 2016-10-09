@@ -16,14 +16,14 @@ cat <<EOF
           
      This is an exhausive benchmark of string-key based (hash)maps available for Free Pascal.
           
-     <p><b>Maps to compare:</b>
+     <p><b>Maps to compare:</b> <button onclick="autocheck('map_', true)">all</button><button onclick="autocheck('map_', false)">none</button>
      
      $(lastunit=""; ./hashbenchmark --mode=list | while read map; do
        unit=$(grep -oE '^[^. _]+' <<<"$map")
        if [[ $unit != $lastunit ]]; then echo '<br>'; fi
        lastunit=$unit;
        if [[ $map =~ contnrs|ghashmap|gmap|rtl-generic ]] && [[ ! $map =~ shortstring ]]; then checked="checked"; else checked=""; fi
-       echo '<input type="checkbox" name="map_'$map'" '$checked'>'$(tr _ ' ' <<<"$map");
+       echo '<input type="checkbox" name="map_'$map'" '$checked'>'$(tr _ ' ' <<<"$map" | sed -e "s/s /'s /");
      done )
      
      <p><b>Datasets:</b> 
@@ -206,6 +206,7 @@ cat <<EOF
   var mapInCat = [0,0,0,0]
   var colors = {};
   var oldcharts = [];
+  var chartmeta = [];
   rawdata.map(function(d){
       if (d.map in colors) return;
       var cat;
@@ -221,9 +222,30 @@ cat <<EOF
       mapInCat[cat]++;
   })
   
+  function myhighlight(chartid, datasetid){
+    var chart = oldcharts[chartid];
+    var meta = chartmeta[chartid];
+    if ("_highlighted" in meta) { 
+      if (meta._highlighted == datasetid) return;
+      chart.data.datasets[meta._highlighted].borderWidth = 3;
+    } 
+    if (datasetid >= 0) {
+      meta._highlighted = datasetid;
+      chart.data.datasets[datasetid].borderWidth = 7;
+    } else
+      delete meta._highlighted
+    chart.update();
+  }
+
+  function autocheck(prefix, state){
+    boxes(prefix).map(function(cb){cb.checked = state;})
+    regen()
+  }
+  
   function regen(){
     oldcharts.map(function(c){c.destroy()});
     oldcharts = [];
+    chartmeta = [];
     var output = document.getElementById("plotoutput");
     output.innerHTML = "";
     
@@ -233,7 +255,8 @@ cat <<EOF
     
     
     var activemaps = [];
-    chosenoption("map_", function(map) { activemaps.push(map); });
+    var activemapslabels = [];
+    chosenoption("map_", function(map, text) { activemaps.push(map); activemapslabels.push(text); });
     
     chosenoption("ds_", function(source, sourcetext){
     chosenoption("model_", function(model, modeltext){
@@ -327,19 +350,21 @@ cat <<EOF
         else newdata.push(metricf(row[j]));
       }
       datasets.push( {
-         label: activemaps[i],
+         label: activemapslabels[i],
          data: newdata,
          fill: false,
-         fill: false,
          borderWidth: 3,
-         borderColor: colors[activemaps[i]]
+         borderColor: colors[activemaps[i]],
+         backgroundColor: colors[activemaps[i]]
       } );
     }
     
     var ctx = document.createElement("canvas")
     output.appendChild(ctx);
+    var tempchartcount = oldcharts.length;
     
-      var myChart = new Chart(ctx, {
+      var myChart;
+      myChart = new Chart(ctx, {
         "type": "line",
         "data": {
           datasets: datasets 
@@ -367,11 +392,19 @@ cat <<EOF
              // console.log 	(data.toSource())
               var p = basedatasets[ti.datasetIndex][ti.index + basedatasetsoffset[ti.datasetIndex]];
               return prettyCount(p.x) + " keys, " + prettyTime(p.t)+ ", "+prettyMem(p.m);
-            }}}
+            }}},
+          legend: {
+            //labels: {usePointStyle: true},
+            onHover: function(event, item){
+              myhighlight(tempchartcount, item.datasetIndex)
+            }
+          }
         }
         
       }); 
+      ctx.onmouseout = function(){myhighlight(tempchartcount, -1);}
       oldcharts.push(myChart)
+      chartmeta.push({})
     
     })
     })
