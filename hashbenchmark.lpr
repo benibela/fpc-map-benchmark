@@ -273,7 +273,7 @@ begin
       qmXorShift: begin
         for j := 1 to queryperkey do begin
           q := xorshift mod (i + 1);
-          //writeln(stderr, i, '<',data[q]);
+          //writeln(stderr, i, '<',q, ' ',data[q]);
           if TGetter.get(map, data[q]) <> @data[q] then fail;
           updateXorShift(xorshift);
         end;
@@ -349,6 +349,7 @@ type
   begin
     inherited;
     sorted := true;
+    CaseSensitive := true;
   end;
 
   function TStringListSorted.getValue(const key: string): pointer; inline;
@@ -723,7 +724,7 @@ begin
     benchmark(mkTree, 'gmap.TMap', '* -> *', @TTestGMap.test);
     benchmark(mkTree, 'gmap.TMap.shortstring', '* -> *', @TTestGMapShortString.test);
     benchmark(mkArray, 'fgl.TFPGMap (sorted)', '* -> *', @TTestFPGMap.test);
-    benchmark(mkArray, 'sysutils.TStringList_(sorted)', 'string -> TObject', @TTestStringList.test);
+    benchmark(mkArray, 'classes.TStringList_(sorted)', 'string -> TObject', @TTestStringList.test);
     {$ifdef benchmarkIniFiles}benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);{$endif}
     benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);
 

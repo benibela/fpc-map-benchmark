@@ -129,7 +129,7 @@ cat <<EOF
       if (d.map in colors) return;
       var cat;
       if (/contnrs.TFP|ghashmap|lazfglhash/.test(d.map)) cat = 0;
-      else if (/fgl.TFP|gmap|lazfglhash|sysutils/.test(d.map)) cat = 1;
+      else if (/fgl.TFP|gmap|lazfglhash|classes/.test(d.map)) cat = 1;
       else if (/rtl-generics/.test(d.map)) cat = 2;
       else cat = 3;   
       //colorCategories[d.map] = cat;
@@ -252,23 +252,23 @@ cat <<EOF
   
   <li>The non-cuckoo maps of the rtl-generic.collections package, i.e. linear and double hashing maps, are more generic, use slightly less memory and are slightly slower for shorter keys, but faster than TFPHashList for longer keys. The linear map appears to be slightly faster than the double hashing one, when the keys are truly random.  </li>
   
-  <li>The cuckoo maps use less memory, at the cost of lower performance. Especially cuckoo-6 is the most memory efficient hash map of them all, but also the slowest. Cuckoo-2 uses nearly the same memory as the non-cuckoo maps, but is still slower. Cuckoo-4 is in the middle. </li>
+  <li>The cuckoo maps use less memory, at the cost of lower performance. Especially cuckoo-6 is the most memory efficient hash map of them all, but also the slowest. Cuckoo-2 uses nearly the same memory as the non-cuckoo maps, but is still slower. Cuckoo-4 is in-between. </li>
   </ul>
   <h4>Good 3rd-party maps:</h4>
   
-  Generally, all 3rd-party maps perform well, but two are especially notable as they are faster than the fpc provided maps in all cases:
+  Generally, all 3rd-party maps perform well, but two are especially notable as they are much faster than the fpc provided maps:
   
   <ul>
-  <li>  <a href="http://yann.merignac.free.fr/unit-gcontnrs.html">Yamer's TGenHashMap</a> in the gcontnrs package is faster and uses less memory than the non-cuckoo maps, but requires more memory than the better cuckoo-maps. For small keys its characterists even matches TFPHashList.
+  <li>  <a href="http://yann.merignac.free.fr/unit-gcontnrs.html">Yamer's TGenHashMap</a> in the gcontnrs package is faster and uses less memory than the non-cuckoo maps, but requires more memory than the memory-efficient cuckoo-maps. For small keys its characterists even matches TFPHashList.
   </li>
-  <li>  <a href="https://github.com/BeRo1985/flre/">Bero's FLRE cache map</a> is an internal used map in the FLRE-package, so it is not the easiest map to use. It is the fastest map, slightly faster than TFPHashList for short keys and much faster than rtl-generics or Yamer's for long keys. However, it has slightly higher memory usage.
+  <li>  <a href="https://github.com/BeRo1985/flre/">Bero's FLRE cache map</a> is an internal used map in the FLRE-package, so it is not the easiest map to use. It is the fastest map for long keys, and similar to TFPHashList and Yamer's map for short keys. However, it has slightly higher memory usage.
   </li>
   </ul>
   
   <h4>Other built-in maps:</h4>
   
   <ul>
-  <li>The array based TStringList and TFPGMap are the most memory efficient, using less memory than even the cuckoo maps. However, as they are not hash maps, their usage is extremely and very slow, even if the maps are sorted, so they are nearly useless as maps. </li>
+  <li>The array based TStringList and TFPGMap are the most memory efficient, using less memory than even the cuckoo maps. However, as they are not hash maps, their usage is extremely slow, even if the maps are sorted, so they are nearly useless as maps. Their default setting of unsorted and (in case of TStringList) case-insensitive matching are quite dangerous. </li>
   
   <li>ghashmap is as fast as the rtl-generics map for short keys, but similar to TFPHashList its performance degrades with longer keys. Unlike TFPHashList it is not the fastest before the slow-down afterwards, so it becomes one of the slowest. It also has a high memory usage.</li>
 
