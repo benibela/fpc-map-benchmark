@@ -299,12 +299,14 @@ type
     pointer>;
   TTestFPHashTable = specialize TG_TestAddDefault<contnrs.TFPDataHashTable>;
 
-type TStringHash = class
-  class function c(const a,b: string): boolean;
-  class function rawhash(const s: string): SizeUInt; inline; static;
-  class function hash(const s: string; n: SizeUInt): SizeUInt; inline; static;
+type generic TG_StringHash<tstring> = class
+  class function c(const a,b: tstring): boolean;
+  class function rawhash(const s: tstring): SizeUInt; inline; static;
+  class function hash(const s: tstring; n: SizeUInt): SizeUInt; inline; static;
   //equal(const AKey1, AKey2: TKey): Boolean;
 end;
+  TStringHash = specialize TG_StringHash<string>;
+  TShortStringHash = specialize TG_StringHash<shortstring>;
 
 type TMyFPGMap = class(specialize TFPGMap<string, pointer>)
   constructor create;
@@ -323,6 +325,13 @@ type
       specialize TG_CallInsert<TSpezGmap>,
       specialize TG_CallGetDefault<TSpezGmap>,
       specialize TG_CallContainsGetNil<TSpezGmap,specialize TG_CallGetFind<TSpezGmap>>,
+      pointer>;
+  TTestGHashMapShortString = specialize TG_TestInsertDefaultContains<specialize THashmap<shortstring, pointer, TShortStringHash>>;
+  TSpezGmapShortString = specialize TMap<shortstring, pointer, TShortStringHash>;
+  TTestGMapShortString = specialize TG_TestXXXX<TSpezGmapShortString,
+      specialize TG_CallInsert<TSpezGmapShortString>,
+      specialize TG_CallGetDefault<TSpezGmapShortString>,
+      specialize TG_CallContainsGetNil<TSpezGmapShortString,specialize TG_CallGetFind<TSpezGmapShortString>>,
       pointer>;
   TTestFPGMap = specialize TG_TestXXXX<
     TMyFPGMap,
@@ -396,21 +405,22 @@ type TTestPasMPStringHashTable = specialize TG_TestXXX<TMyPasMPStringHashTable, 
 {$endif}
 
 {$ifdef BENCHMARKYAMERSHASHMAP}
-type TMyGContnrsMap = class(specialize TGenHashMap<string, pointer>)
-  function DefaultHashKey(const Key: string): Integer; override;
-  function DefaultKeysEqual(const A, B: string): Boolean; override;
+type generic TMyGContnrsMap<T,Hasher> = class(specialize TGenHashMap<T, pointer>)
+  function DefaultHashKey(const Key: T): Integer; override;
+  function DefaultKeysEqual(const A, B: T): Boolean; override;
 end;
 
-function TMyGContnrsMap.DefaultHashKey(const Key: string): Integer;
+function TMyGContnrsMap.DefaultHashKey(const Key: T): Integer;
 begin
-  Result:=TStringHash.rawhash(key);
+  Result:=Hasher.rawhash(key);
 end;
 
-function TMyGContnrsMap.DefaultKeysEqual(const A, B: string): Boolean;
+function TMyGContnrsMap.DefaultKeysEqual(const A, B: T): Boolean;
 begin
   result := a = b;
 end;
-type TTestGContnrs = specialize TG_TestInsertDefaultContains<TMyGContnrsMap>;
+type TTestGContnrs = specialize TG_TestInsertDefaultContains<specialize TMyGContnrsMap<string, TStringHash>>;
+     TTestGContnrsShortString = specialize TG_TestInsertDefaultContains<specialize TMyGContnrsMap<shortstring, TShortStringHash>>;
 {$endif}
 
 {$ifdef BENCHMARKGENERICS}
@@ -421,6 +431,13 @@ type
   TTestGenericCuckooD2 = specialize  TG_TestAddDefaultContainsKey<specialize TCuckooD2<string, pointer>>;
   TTestGenericCuckooD4 = specialize  TG_TestAddDefaultContainsKey<specialize TCuckooD4<string, pointer>>;
   TTestGenericCuckooD6 = specialize  TG_TestAddDefaultContainsKey<specialize TCuckooD6<string, pointer>>;
+
+  TTestGenericLinearShortString = specialize    TG_TestAddDefaultContainsKey<specialize TOpenAddressingLP<shortstring, pointer>>;
+  TTestGenericQuadraticShortString = specialize TG_TestAddDefaultContainsKey<specialize TOpenAddressingQP<shortstring, pointer>>;
+  TTestGenericDoubleShortString = specialize    TG_TestAddDefaultContainsKey<specialize TOpenAddressingDH<shortstring, pointer>>;
+  TTestGenericCuckooD2ShortString = specialize  TG_TestAddDefaultContainsKey<specialize TCuckooD2<shortstring, pointer>>;
+  TTestGenericCuckooD4ShortString = specialize  TG_TestAddDefaultContainsKey<specialize TCuckooD4<shortstring, pointer>>;
+  TTestGenericCuckooD6ShortString = specialize  TG_TestAddDefaultContainsKey<specialize TCuckooD6<shortstring, pointer>>;
 {$endif}
 
 {$ifdef benchmarkBARRYKELLYsHashlist}
@@ -497,12 +514,12 @@ type
   TTestKealonsHashMap = specialize TG_TestXDefault<TMyKealonsHashMap>, specialize TG_CallDefault<TMyKealonsHashMap>>;
 {$endif}
 
-class function TStringHash.c(const a, b: string): boolean;
+class function TG_StringHash.c(const a, b: tstring): boolean;
 begin
   result := a < b;
 end;
 
-class function TStringHash.rawhash(const s: string): SizeUInt;
+class function TG_StringHash.rawhash(const s: tstring): SizeUInt;
 var
   p,pmax : PChar;
 begin
@@ -519,7 +536,7 @@ begin
 {$pop}
 end;
 
-class function TStringHash.hash(const s: string; n: SizeUInt): SizeUInt; static; //as in contrnrs
+class function TG_StringHash.hash(const s: tstring; n: SizeUInt): SizeUInt; static; //as in contrnrs
 begin
   result := rawhash(s) and (n - 1);
 end;
@@ -552,6 +569,7 @@ begin
   cmdline.declareString('sources', 'Source file');
   cmdline.declareString('cacheddata', 'Source file without duplicate lines', '');
   cmdline.declareInt('keycount', 'keycount', 0);
+  cmdline.declareInt('basekeycount', 'basekeycount', 0);
   cmdline.declareInt('keylen', 'keylen', 0);
   cmdline.declareInt('queriesperkey', 'queryperkey', 100);
   cmdline.declareInt('failqueriesperkey', 'failqueryperkey', 10);
@@ -612,10 +630,12 @@ begin
     reset(cacheddata);
   end;
 
+  basekeycount := cmdline.readInt('basekeycount');
+  if basekeycount = 0 then basekeycount := keycount;
+
   cmdline.free;
 
 
-  basekeycount := keycount;
 
   data := nil;
   faildata := nil;
@@ -666,10 +686,14 @@ begin
         end;
       end;
     end else begin
-      for i := 0 to keycount - oldkeycount - 1 do
+      for i := 0 to keycount - oldkeycount - 1 do begin
+        if eof(cacheddata) then begin writeln(stderr, 'data source exhausted'); flushall; halt; end;
         readln(cacheddata, data[i + oldkeycount]);
-      for i := 0 to failkeycount - oldfailkeycount - 1 do
+      end;
+      for i := 0 to failkeycount - oldfailkeycount - 1 do begin
+        if eof(cacheddata) then begin writeln(stderr, 'data source exhausted'); flushall; halt; end;
         readln(cacheddata, faildata[i + oldfailkeycount]);
+      end;
     end;
 
     writeln(stderr, 'Data count: ', length(data), ' ', sourcefile, ' keylen: ', keylen, ' read/write: ', queryperkey, ' fail/write: ', failqueryperkey);
@@ -695,7 +719,9 @@ begin
     benchmark(mkHash, 'contnrs.TFPHashList', 'shortstring -> pointer', @TTestFPHashList.test);
     benchmark(mkHash, 'contnrs.TFPDataHashTable', 'string -> pointer', @TTestFPHashTable.test);
     benchmark(mkHash, 'ghashmap.THashMap', '* -> *', @TTestGHashMap.test);
+    benchmark(mkHash, 'ghashmap.THashMap.shortstring', '* -> *', @TTestGHashMapShortString.test);
     benchmark(mkTree, 'gmap.TMap', '* -> *', @TTestGMap.test);
+    benchmark(mkTree, 'gmap.TMap.shortstring', '* -> *', @TTestGMapShortString.test);
     benchmark(mkArray, 'fgl.TFPGMap (sorted)', '* -> *', @TTestFPGMap.test);
     benchmark(mkArray, 'sysutils.TStringList_(sorted)', 'string -> TObject', @TTestStringList.test);
     {$ifdef benchmarkIniFiles}benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);{$endif}
@@ -709,10 +735,18 @@ begin
     benchmark(mkHash, 'rtl-generics_cuckoo2', '* -> *', @TTestGenericCuckooD2.test);
     benchmark(mkHash, 'rtl-generics_cuckoo4', '* -> *', @TTestGenericCuckooD4.test);
     benchmark(mkHash, 'rtl-generics_cuckoo6', '* -> *', @TTestGenericCuckooD6.test);
+
+    benchmark(mkHash, 'rtl-generics_linear.shortstring', '* -> *', @TTestGenericLinearShortString.test);
+    {$ifdef benchmarkGenericsQuadraticProbing}benchmark(mkHash, 'rtl-generics_quadratic.shortstring', '* -> *', @TTestGenericQuadraticShortString.test);{$endif}
+    benchmark(mkHash, 'rtl-generics_double.shortstring', '* -> *', @TTestGenericDoubleShortString.test);
+    benchmark(mkHash, 'rtl-generics_cuckoo2.shortstring', '* -> *', @TTestGenericCuckooD2ShortString.test);
+    benchmark(mkHash, 'rtl-generics_cuckoo4.shortstring', '* -> *', @TTestGenericCuckooD4ShortString.test);
+    benchmark(mkHash, 'rtl-generics_cuckoo6.shortstring', '* -> *', @TTestGenericCuckooD6ShortString.test);
     {$endif}
     {$ifdef benchmarkBEROsFLRE}benchmark(mkHash, 'Bero''s_TFLRECacheHashMap', 'string -> TFLRE', @TTestFLRE.test);{$endif}
     {$ifdef benchmarkBEROsPASMP}benchmark(mkParallelHash, 'Bero''s_TPasMPHashTable', '* -> *', @TTestPasMPStringHashTable.test);{$endif}
     {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap', '* -> *', @TTestGContnrs.test);{$endif}
+    {$ifdef benchmarkYAMERsHashmap}benchmark(mkHash, 'Yamer''s_TGenHashMap.shortstring', '* -> *', @TTestGContnrsShortString.test);{$endif}
     {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s THashList (fixed size)', 'string -> pointer', @TTestBKHashList.test);{$endif}
     {$ifdef benchmarkCL4L}benchmark(mkHash, 'CL4L''s_TStrHashMap (fixed size)', 'string -> TObject', @TTestCL4LStrHashMap.test);{$endif}
     {$ifdef benchmarkFundamentals}benchmark(mkHash, 'fundamentals TPointerDictionaryA', 'string -> pointer', @TTestFundamentalsPointerDictionaryA.test);{$endif}

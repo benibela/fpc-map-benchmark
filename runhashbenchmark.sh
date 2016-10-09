@@ -1,6 +1,6 @@
 #!/bin/bash
 if [[ -z "$1" ]]; then
-  mkdir /tmp/hashmarkcache
+  mkdir -p /tmp/hashmarkcache
 
   if [[ ! -f /tmp/hashmarkcache/dics ]]; then 
     if [[ -d /usr/share/hunspell/ ]]; then dicpath=/usr/share/hunspell/; 
@@ -8,39 +8,68 @@ if [[ -z "$1" ]]; then
     else echo no dics; exit;
     fi
     dics="$dicpath/de_DE.dic:$dicpath/en_US.dic"
-    ./hashbenchmark --sources=$dics  --keycount=100000 --failqueryperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/dics
+    ./hashbenchmark --sources=$dics  --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/dics
   fi
   if [[ ! -f /tmp/hashmarkcache/200 ]]; then 
-    ./hashbenchmark --keylen=200  --keycount=100000 --failqueryperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
+    ./hashbenchmark --keylen=200  --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
   fi
   if [[ ! -f /tmp/hashmarkcache/8 ]]; then 
-    ./hashbenchmark --keylen=8  --keycount=100000 --failqueryperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/8
+    ./hashbenchmark --keylen=8  --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/8
   fi	
 
-  mkdir results
+  mkdir -p results
   ./hashbenchmark --mode=list | while read map; do
     ./runhashbenchmark.sh "$map"
   done
   exit;
 fi;
+name=$1
+args="--filter=$name --mode=multi-run --memlimit=8192 --timelimit=300000"
 
+function run(){
+  cache="--cacheddata /tmp/hashmarkcache/$1"
+  queriesperkey=$2
+  failqueriesperkey=$3
+  result=results/$name.$1.$2.$3
+  if [[ ! -f $result ]]; then 
+    keycount=1000;
+    basekeycount=1000;
+  else
+    keycount=$(tail -n 1 $result | tail -1 | cut -f 2 -d' ')
+    basekeycount=$(sed -e 's/[^0]/1/' <<<$keycount)  
+  fi
+  ./hashbenchmark $args $cache --keycount=$keycount --basekeycount=$basekeycount --queriesperkey $queriesperkey --failqueriesperkey $failqueriesperkey >> $result
+}
 
+run dics 0 0
+run dics 3 3
+run dics 20 2
+run dics 2 20
 
+run 200 0 0
+run 200 3 3
+run 200 20 2
+run 200 2 20
 
-./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 0 --failqueriesperkey 0 > results/$1.dics.0.0
-./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 3 --failqueriesperkey 3 > results/$1.dics.3.3
-./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 20 --failqueriesperkey 2 > results/$1.dics.20.2
-./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 2 --failqueriesperkey 20 > results/$1.dics.2.20
-
-./hashbenchmark --keylen=8 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 0 --failqueriesperkey 0 > results/$1.8.0.0
-./hashbenchmark --keylen=8 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 3 --failqueriesperkey 3 > results/$1.8.3.3
-./hashbenchmark --keylen=8 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 20 --failqueriesperkey 2 > results/$1.8.20.2
-./hashbenchmark --keylen=8 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 2 --failqueriesperkey 20 > results/$1.8.2.20
-
-./hashbenchmark --keylen=200 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 0 --failqueriesperkey 0 > results/$1.200.0.0
-./hashbenchmark --keylen=200 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 3 --failqueriesperkey 3 > results/$1.200.3.3
-./hashbenchmark --keylen=200 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 20 --failqueriesperkey 2 > results/$1.200.20.2
-./hashbenchmark --keylen=200 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 2 --failqueriesperkey 20 > results/$1.200.2.20
+run 8	 0 0
+run 8 3 3
+run 8 20 2
+run 8 2 20
+exit
+#./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 0 --failqueriesperkey 0 > results/$1.dics.0.0
+#./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 3 --failqueriesperkey 3 > results/$1.dics.3.3
+#./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 20 --failqueriesperkey 2 > results/$1.dics.20.2
+#./hashbenchmark --sources=$dics --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 2 --failqueriesperkey 20 > results/$1.dics.2.20
+#
+#./hashbenchmark --keylen=8 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 0 --failqueriesperkey 0 > results/$1.8.0.0
+#./hashbenchmark --keylen=8 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 3 --failqueriesperkey 3 > results/$1.8.3.3
+#./hashbenchmark --keylen=8 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 20 --failqueriesperkey 2 > results/$1.8.20.2
+#./hashbenchmark --keylen=8 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 2 --failqueriesperkey 20 > results/$1.8.2.20
+#
+#./hashbenchmark --keylen=200 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 0 --failqueriesperkey 0 > results/$1.200.0.0
+#./hashbenchmark --keylen=200 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 3 --failqueriesperkey 3 > results/$1.200.3.3
+#./hashbenchmark --keylen=200 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 20 --failqueriesperkey 2 > results/$1.200.20.2
+#./hashbenchmark --keylen=200 --filter=$1 --mode=multi-run --keycount=1000 --memlimit=4096 --timelimit=180000 --queriesperkey 2 --failqueriesperkey 20 > results/$1.200.2.20
 
 
 
