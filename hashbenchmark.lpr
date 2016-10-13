@@ -12,7 +12,7 @@ program hashbenchmark;
 {$define benchmarkBARRYKELLYsHashlist}
 {$define benchmarkCL4L}
 {$define benchmarkFundamentals}
-//{$define benchmarkLightContainers} are not compiling
+{$define benchmarkLightContainers}
 {$define benchmarkDeCAL}
 {$define benchmarkJUHAsStringHashMap}
 //{$define benchmarkKEALONsCL4FPC} conflicts with benchmarkCL4L as you cannot access generic hashmap when unit hashmap is used (#30646)
@@ -37,7 +37,7 @@ uses
   {$ifdef benchmarkBARRYKELLYsHashlist},HashList{$endif} //no idea where it came from, but aminer used it there https://sites.google.com/site/aminer68/scalable-parallel-hashlist
   {$ifdef benchmarkCL4L},Hashmap{$endif} //https://github.com/CynicRus/CL4L
   {$ifdef benchmarkFundamentals},flcDataStructs{$endif}//https://github.com/fundamentalslib/fundamentals5
-  {$ifdef benchmarkLightContainers},LightContainers{$endif} //http://www.stack.nl/~marcov/lightcontainers.zip
+  {$ifdef benchmarkLightContainers},LightContainers,genlight{$endif} //http://www.stack.nl/~marcov/lightcontainers.zip
   {$ifdef benchmarkDeCAL}, DeCAL{$endif}//from https://bitbucket.org/hovadur/decal
   {$ifdef benchmarkJUHAsStringHashMap},StrHashMap{$endif}//from http://wiki.freepascal.org/StringHashMap
   {$ifdef benchmarkKEALONsCL4FPC},hashmaps{$endif} //https://sourceforge.net/projects/cl4fpc/
@@ -173,6 +173,9 @@ type generic TG_CallAddXCast<__TMap, TCast> = class
   generic TG_CallGetFind<TMap> = class
     class function get(map: TMap; const key: string): pointer; static; inline;
   end;
+  generic TG_CallGetLocate<TMap> = class
+    class function get(map: TMap; const key: string): pointer; static; inline;
+  end;
   generic TG_CallContains<TMap> = class
     class function contains(map: TMap; const key: string): boolean; static; inline;
   end;
@@ -183,6 +186,9 @@ type generic TG_CallAddXCast<__TMap, TCast> = class
     class function contains(map: TMap; const key: string): boolean; static; inline;
   end;
   generic TG_CallContainsIndexOf<TMap> = class
+    class function contains(map: TMap; const key: string): boolean; static; inline;
+  end;
+  generic TG_CallContainsLocate<TMap> = class
     class function contains(map: TMap; const key: string): boolean; static; inline;
   end;
   generic TG_TestXXXX<TMap, TAdder, TGetter, TContains, TCast> = class
@@ -223,6 +229,10 @@ class function TG_CallGetFind.get(map: TMap; const key: string): pointer; static
 begin
   result := pointer(map.find(key));
 end;
+class function TG_CallGetLocate.get(map: TMap; const key: string): pointer; static; inline;
+begin
+  map.locate(key, result);
+end;
 class function TG_CallContains.contains(map: TMap; const key: string): boolean; static; inline;
 begin
   result := map.contains(key);
@@ -238,6 +248,11 @@ end;
 class function TG_CallContainsGetNil.contains(map: TMap; const key: string): boolean; static; inline;
 begin
   result := TGetter.get(map, key) <> nil;
+end;
+class function TG_CallContainsLocate.contains(map: TMap; const key: string): boolean; static; inline;
+var temp: pointer;
+begin
+  result := map.locate(key, temp);
 end;
 
 procedure updateXorShift(var xorshift: cardinal); inline;
@@ -486,7 +501,43 @@ type TTestFundamentalsPointerDictionaryA = specialize TG_TestAddDefault<TPointer
 {$endif}
 
 {$ifdef benchmarkLightContainers}
-type TTestLightContainers = specialize TG_TestAddDefault<TLightStringMap<pointer>>;
+type TTestGenLightContainers = specialize TG_TestXXXX<specialize TLightStringMap<pointer>,
+    specialize TG_CallAddObjectXCast<specialize TLightStringMap<pointer>, pointer>,
+    specialize TG_CallGetLocate<specialize TLightStringMap<pointer>>,
+    specialize TG_CallContainsLocate<specialize TLightStringMap<pointer>>,
+    pointer>;
+
+type TMyLightContainer = class
+  lm: LightContainers.TLightMap;
+  constructor create;
+  procedure add(const k: string; value: pointer); inline;
+  function get(const k: string): pointer; inline;
+  destructor destroy; override;
+  property items[const k: string]: pointer read get; default;
+
+end;
+
+constructor TMyLightContainer.create;
+begin
+  lm := LightMapStrCreate;
+end;
+procedure TMyLightContainer.add(const k: string; value: pointer); inline;
+begin
+  LightMapStrPutpair(lm, k, value);
+end;
+function TMyLightContainer.get(const k: string): pointer; inline;
+begin
+  result := LightMapStrLocate(lm, k);
+end;
+destructor TMyLightContainer.destroy;
+begin
+  LightMapStrDestroy(lm);
+  inherited;
+end;
+
+type  TTestLightContainers = specialize TG_TestAddDefault<TMyLightContainer>;
+
+
 {$endif}
 
 {$ifdef benchmarkDeCAL}
@@ -751,7 +802,8 @@ begin
     {$ifdef benchmarkBARRYKELLYsHashlist}benchmark(mkHash, 'Barry_Kelly''s THashList (fixed size)', 'string -> pointer', @TTestBKHashList.test);{$endif}
     {$ifdef benchmarkCL4L}benchmark(mkHash, 'CL4L''s_TStrHashMap (fixed size)', 'string -> TObject', @TTestCL4LStrHashMap.test);{$endif}
     {$ifdef benchmarkFundamentals}benchmark(mkHash, 'fundamentals TPointerDictionaryA', 'string -> pointer', @TTestFundamentalsPointerDictionaryA.test);{$endif}
-    {$ifdef benchmarkLightContainers}benchmark(mkHash, 'marcov''s generic lightcontainers', '* -> *', @TTestLightContainers.test);{$endif}
+    {$ifdef benchmarkLightContainers}benchmark(mkHash, 'marcov''s lightcontainers', 'string -> pointer', @TTestLightContainers.test);
+     benchmark(mkHash, 'marcov''s generic lightcontainers', '* -> *', @TTestGenLightContainers.test);{$endif}
     {$ifdef benchmarkDeCAL}benchmark(mkHash, 'hovadur''s DeCAL ', '* -> *', @TTestDeCAL.test);{$endif}
     {$ifdef benchmarkJUHAsStringHashMap}benchmark(mkHash, 'JUHA''s StringHashMap', 'string -> pointer', @TTestJuhaStrHashMap.test);{$endif}
     {$ifdef benchmarkKEALONsCL4FPC}benchmark(mkHash, 'kealon''s CL4fpc', '* -> *', @TTestKealonsHashMap.test);{$endif}
