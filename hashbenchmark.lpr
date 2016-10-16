@@ -27,7 +27,13 @@ uses
   {$IFDEF UNIX}{$IFDEF UseCThreads}
   cthreads,
   {$ENDIF}{$ENDIF}
-  bbutils, rcmdline,
+  bbutils, rcmdline,(*{$ifdef unix}unix, unixutil,baseunix,
+  {$IFDEF LINUX}
+  Linux,  // for clock_gettime() access
+  {$ENDIF}
+  {$IFDEF FreeBSD}
+  FreeBSD,  // for clock_gettime() access
+  {$ENDIF}{$endif}*)
   Classes,sysutils,math,contnrs,ghashmap
   {$ifdef benchmarkIniFiles},IniFiles{$endif},fgl,gmap,lazfglhash
   {$ifdef benchmarkGenerics}, Generics.Collections{$endif} //https://github.com/dathox/generics.collections
@@ -62,6 +68,53 @@ begin
   halt;
 end;
 
+(*//from epiktimer
+type  TickType = int64;
+function SystemTicks: TickType;
+{$IFDEF WINDOWS}
+begin
+  QueryPerformanceCounter(Result);
+{$ELSE}
+  {$IF defined(LINUX)} {or defined(FreeBSD)}  // FreeBSD disabled - waiting for FPC to catch up
+  { Experimental }
+  function newGetTickCount: Cardinal;
+  const
+    NanoPerSec = 1000000000;
+    NanoPerMilli = 1000000;
+    MilliPerSec = 1000;
+  var
+    ts: TTimeSpec;
+    i: TickType;
+    t: timeval;
+  begin
+    // use the Posix clock_gettime() call
+    if clock_gettime(CLOCK_MONOTONIC, @ts)=0 then
+    begin
+      // Use the FPC fallback
+      fpgettimeofday(@t,nil);
+      // Build a 64 bit microsecond tick from the seconds and microsecond longints
+      Result := (TickType(t.tv_sec) * NanoPerMilli) + t.tv_usec;
+      Exit;
+    end;
+    i := ts.tv_sec;
+    i := (i*MilliPerSec) + ts.tv_nsec div NanoPerMilli;
+    Result := i;
+  end;
+
+begin
+    Result := newGetTickCount;
+  {$ELSE}
+  var
+    t: timeval;
+  begin
+    // Use the FPC fallback
+    fpgettimeofday(@t,nil);
+    // Build a 64 bit microsecond tick from the seconds and microsecond longints
+    Result := (TickType(t.tv_sec) * NanoPerMilli) + t.tv_usec;
+  {$ENDIF LINUX}
+{$ENDIF WINDOWS}
+end;           *)
+
 var data, faildata: array of string;
     randomqueries: array of integer;
     keycount, failkeycount, keylen, queryperkey, failqueryperkey: integer;
@@ -70,31 +123,40 @@ var data, faildata: array of string;
     runMode: (rmList, rmDumpData, rmSingleRun, rmAddativeKeyCount);
     mapFilter: string;
 
+
+
 function benchmarkf(kind: TMapKind; name: string; p: TBenchmarkFunc): boolean;
+type tmeasurednumber = {double}int64;
 const repcount = 1;
 var
-  r: Integer;
-  tms: TDateTime;
-  mean, meanmemory: int64;
-  std, stdmemory: int64;
-  timing: array[1..repcount] of int64;
+  r, oversum, j: Integer;
+  tms: tdatetime;
+  mean, meanmemory: tmeasurednumber;
+  std, stdmemory: tmeasurednumber;
+  timing: array[1..repcount] of tmeasurednumber;
   m: TMemoryManager;
-  memory: array[1..repcount] of int64;
+  memory: array[1..repcount] of tmeasurednumber;
   heapstatus: TFPCHeapStatus;
-  map: tobject;
+  maps: array[1..1000] of tobject;
 begin
   result := false;
   GetMemoryManager(m);
   mean := 0;
   meanmemory := 0;
   result := true;
+  oversum := 1;
+  if keycount < 500 then oversum := 1000
+  else if keycount < 4000 then oversum := 100
+  else if (keycount < 50000) and (kind = mkHash) then oversum := 10;
   for r := 1 to repcount do begin
     heapstatus := m.GetFPCHeapStatus();
     tms := now;
-    map := p();
-    timing[r] := round((now - tms)*MSecsPerDay);
-    memory[r] := m.GetFPCHeapStatus().CurrHeapUsed - heapstatus.CurrHeapUsed;
-    map.free;
+    for j := 1 to oversum do
+      maps[j] := p();
+    timing[r] := round((now - tms)*MSecsPerDay);;
+    memory[r] := (m.GetFPCHeapStatus().CurrHeapUsed - heapstatus.CurrHeapUsed) div oversum;
+    for j := 1 to oversum do
+      maps[j].free;
     if timing[r] > timelimit then begin
       writeln(stderr, name, ' time limit exceeded: ', round(timing[r]), ' > ', timelimit);
       flushall;
@@ -119,10 +181,13 @@ begin
     meanmemory := round(meanmemory / repcount);
     //writeln('t',timing[1],' ',timing[2],' ',timing[3]);
     //writeln('m',memory[1],' ',memory[2],' ',memory[3]);
-    //std := round(stddev(pdouble(@timing[1]), repcount)); //sometimes this does not work (ofc it was a double array before). sqrt fail? Negative variance? Either the FPU is in an invalid state from one of the maps, or casting double to extended rounds in the wrong direction.
-    //stdmemory := round(stddev(pdouble(@memory[1]), repcount));
+    std := round(stddev(pdouble(@timing[1]), repcount)); //sometimes this does not work (ofc it was a double array before). sqrt fail? Negative variance? Either the FPU is in an invalid state from one of the maps, or casting double to extended rounds in the wrong direction.
+    stdmemory := round(stddev(pdouble(@memory[1]), repcount));
   end;
-  writeln(name, ' ', keycount, ' ', mean, ' +- ', std, ' ', meanmemory, ' +- ',  stdmemory);
+  if oversum <= 1 then
+    writeln(name, ' ', keycount, ' ', mean, ' +- ', std, ' ', meanmemory, ' +- ',  stdmemory)
+   else
+    writeln(name, ' ', keycount, ' ', (mean/oversum):3:3, ' +- ', std, ' ', meanmemory, ' +- ',  stdmemory);
   flushall;
 end;
 
@@ -606,7 +671,7 @@ type TReferenceHashmap = TFPHashList;
 
 var
   s: string;
-  i, j, basekeycount: Integer;
+  i, j, basekeycount, maxkeycount: Integer;
   referenceHashmap: TReferenceHashmap;
   referenceConflict: boolean;
   addkeycount, oldkeycount, oldfailkeycount: integer;
@@ -622,6 +687,7 @@ begin
   cmdline.declareString('cacheddata', 'Source file without duplicate lines', '');
   cmdline.declareInt('keycount', 'keycount', 0);
   cmdline.declareInt('basekeycount', 'basekeycount', 0);
+  cmdline.declareInt('maxkeycount', 'maxkeycount', high(integer));
   cmdline.declareInt('keylen', 'keylen', 0);
   cmdline.declareInt('queriesperkey', 'queryperkey', 100);
   cmdline.declareInt('failqueriesperkey', 'failqueryperkey', 10);
@@ -684,6 +750,7 @@ begin
 
   basekeycount := cmdline.readInt('basekeycount');
   if basekeycount = 0 then basekeycount := keycount;
+  maxkeycount := cmdline.readInt('maxkeycount');
 
   cmdline.free;
 
@@ -815,7 +882,7 @@ begin
         basekeycount := basekeycount * 10;
       end;
     end;
-  until (runMode in [rmList, rmSingleRun]) or (keycount < 0);
+  until (runMode in [rmList, rmSingleRun]) or (keycount < 0) or (keycount > maxkeycount);
 
   referenceHashmap.Free;
   sources.free;
