@@ -59,7 +59,7 @@ cat <<EOF
      <input type="checkbox"  name="yaxis_logarithmic" checked> logarithmic
 
      &nbsp;&nbsp;&nbsp;&nbsp;<b>keys limit:</b> 
-     <input id="key_min" value="0" oninput="regen()"> to
+     <input id="key_min" value="1000" oninput="regen()"> to
      <input id="key_max" value="1000000000" oninput="regen()">  
 
   <div id="plotoutput"></div>
@@ -133,7 +133,7 @@ for res in $resultpath/*; do #*/
   failqueriesperkey=${BASH_REMATCH[4]}
   echo '{"map": "'$name'", "source": "'$source'", "queriesperkey": '$queriesperkey', "failqueriesperkey": '$failqueriesperkey', '
   echo '"rawdata": ['
-  cut  $res -f 2,3,6 -d' ' | sed -Ee 's/^([0-9]+) +([0-9]+) +([0-9]+)/\1,\2,\3,/' | tr -d '\n'
+  cut  $res -f 2,3,6 -d' ' | sed -Ee 's/^([0-9]+) +([0-9.]+) +([0-9]+)/\1,\2,\3,/' | tr -d '\n'
   echo ']},'
 done
 echo '];'
@@ -164,12 +164,12 @@ cat <<EOF
   var metrics = [
     "absolute time (lower is better)",   metricKeysLabel,   metricTimeLabel, function(d) { return {x: d.x, y:  d.t}; },
     "absolute memory (lower is better)", metricKeysLabel,   metricMemoryLabel, function(d) { return {x: d.x, y:  d.m}; },
-    "keys / time (higher is better)",     metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.x / Math.max(1,d.t)} },
+    "keys / time (higher is better)",     metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.x / Math.max(0.001,d.t)} },
     "keys / memory (higher is better)",   metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.x / Math.max(1,d.m)} },
     "time , memory (bottom left is best)",   metricTimeLabel,   metricMemoryLabel, function(d){ return {x: d.t, y:  d.m, k: d.x} },
     "memory , time (bottom left is best)",   metricMemoryLabel, metricTimeLabel, function(d){ return {x: d.m, y:  d.t, k: d.x} },
     "time / memory",   metricMemoryLabel, "", function(d){ return {x: d.m, y:  d.t / Math.max(1,d.m), k: d.x} },
-    "memory / time",   metricTimeLabel,   "", function(d){ return {x: d.t, y:  d.m / Math.max(1,d.t), k: d.x} },
+    "memory / time",   metricTimeLabel,   "", function(d){ return {x: d.t, y:  d.m / Math.max(0.001,d.t), k: d.x} },
     "time / keys (lower is better)",     metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.t / Math.max(1,d.x), k: d.x} },
     "memory / keys (lower is better)",   metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.m / Math.max(1,d.x), k: d.x} },
   ];
