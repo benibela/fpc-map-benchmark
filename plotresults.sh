@@ -203,7 +203,7 @@ cat <<EOF
   }
   
   var colorOfCat = ["#4daf4a", "#e41a1c", "#377eb8", "#984ea3"]
-  var mapInCat = [0,0,0,0]
+  var mapInCat = [0,0,0,0,0,0,0,0]
   var colors = {};
   var oldcharts = [];
   var chartmeta = [];
@@ -216,11 +216,17 @@ cat <<EOF
       else cat = 3;   
       //colorCategories[d.map] = cat;
       var c = Color(colorOfCat[cat]);
+      cat = 2 * cat;
+      if (/shortstring/.test(d.map)) {c.hue(c.hue()+70); cat++;}
       if (mapInCat[cat] < 3) c.darken(0.2 * (3 - mapInCat[cat]));
-      else if (mapInCat[cat] > 3) c.lighten(0.2 * (mapInCat[cat] - 3));
+      else if (mapInCat[cat] > 3 && mapInCat[cat] < 7) c.lighten(0.2 * (mapInCat[cat] - 3));
+      else if (mapInCat[cat] != 3){
+        c.hue(c.hue() + 30);
+        c.lighten(0.2 * (10 - mapInCat[cat]));
+      } 
       colors[d.map] = c.hexString();
       mapInCat[cat]++;
-  })
+  }) 
   
   function myhighlight(chartid, datasetid){
     var chart = oldcharts[chartid];
