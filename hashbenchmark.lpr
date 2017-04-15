@@ -4,8 +4,9 @@ program hashbenchmark;
 {$define UseCThreads}
 
 {$define benchmarkGenerics}
-//{$define benchmarkGenericsQuadraticProbing} does not work: https://github.com/dathox/generics.collections/issues/4
+{$define benchmarkGenericsQuadraticProbing}
 //{$define benchmarkIniFiles} just a wrapper around TFPDataHashTable
+{$define benchmarkLAZFGLHash} //test failed.
 {$define benchmarkBEROsFLRE}
 {$define benchmarkBEROsPASMP}
 {$define benchmarkYAMERsHashmap}
@@ -35,7 +36,8 @@ uses
   FreeBSD,  // for clock_gettime() access
   {$ENDIF}{$endif}*)
   Classes,sysutils,math,contnrs,ghashmap
-  {$ifdef benchmarkIniFiles},IniFiles{$endif},fgl,gmap,lazfglhash
+  {$ifdef benchmarkIniFiles},IniFiles{$endif},fgl,gmap
+  {$ifdef benchmarkLAZFGLHash},lazfglhash{$endif}
   {$ifdef benchmarkGenerics}, Generics.Collections{$endif} //https://github.com/dathox/generics.collections
   {$ifdef benchmarkBEROsFLRE}, FLRE{$endif} //https://github.com/BeRo1985/flre/
   {$ifdef BENCHMARKBEROSPASMP}, PasMP{$endif} //https://github.com/BeRo1985/pasmp/
@@ -462,7 +464,16 @@ end;
 {$endif}
 
 
-type TTestLazFPGHashTable = specialize TG_TestAddDefault<specialize TLazFPGHashTable<pointer>>;
+{$ifdef benchmarkLAZFGLHash}
+type TTestLazFPGHashTable = specialize TG_TestXXXX<
+  specialize TLazFPGHashTable<pointer>,
+  specialize TG_CallAdd<specialize TLazFPGHashTable<pointer>>,
+  specialize TG_CallGetDefault<specialize TLazFPGHashTable<pointer>>,
+  specialize TG_CallContainsGetNil<specialize TLazFPGHashTable<pointer>, specialize TG_CallGetFind<specialize TLazFPGHashTable<pointer>>>,
+  pointer
+>;
+
+{$endif}
 
 
 {$ifdef benchmarkBEROsFLRE}
@@ -844,7 +855,7 @@ begin
     benchmark(mkArray, 'fgl.TFPGMap (sorted)', '* -> *', @TTestFPGMap.test);
     benchmark(mkArray, 'classes.TStringList_(sorted)', 'string -> TObject', @TTestStringList.test);
     {$ifdef benchmarkIniFiles}benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);{$endif}
-    benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);
+    {$ifdef benchmarkLAZFGLHash}benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);{$endif}
 
 
     {$ifdef benchmarkGenerics}
