@@ -117,7 +117,7 @@ cat <<EOF
   If this page is too slow, you can uncheck all checkboxes in a category, then no plots are shown and selections are instantanously. You can also disable maps by clicking their name on the legend without affecting other plots.
   Some maps have no datapoints for high key count, then only points with low key counts are shown and the map might appear more efficient than it is in the scatter plot. Move the mouse over the data points to check. 
   
-  <br><br>This benchmark was compiled with freepascal 3.1.1 (r34557) and run on a 64-bit 1.6 GHz openSUSE 12.2 computer.
+  <br><br>This benchmark was compiled with freepascal 3.1.1 (r35800) and run on a 64-bit Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz openSUSE 12.2 system. <a href="fpc-map-benchmark-r34557_en.html">older version</a>
   
        <script>
 EOF
