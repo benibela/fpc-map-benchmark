@@ -13,7 +13,7 @@ program hashbenchmark;
 {$define benchmarkYAMERsHashmap}
 {$define benchmarkBARRYKELLYsHashlist}
 {$define benchmarkCL4L}
-{$define benchmarkFundamentals}
+//{$define benchmarkFundamentals}
 {$define benchmarkLightContainers}
 {$define benchmarkDeCAL}
 {$define benchmarkJUHAsStringHashMap}
