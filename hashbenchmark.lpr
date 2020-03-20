@@ -7,6 +7,7 @@ program hashbenchmark;
 {$define benchmarkGenericsQuadraticProbing}
 //{$define benchmarkIniFiles} just a wrapper around TFPDataHashTable
 {$define benchmarkLAZFGLHash} //test failed.
+{$define benchmarkLAZXMLUtils}
 {$define benchmarkBEROsFLRE}
 {$define benchmarkBEROsPASMP}
 {$define benchmarkYAMERsHashmap}
@@ -38,6 +39,7 @@ uses
   Classes,sysutils,math,contnrs,ghashmap
   {$ifdef benchmarkIniFiles},IniFiles{$endif},fgl,gmap
   {$ifdef benchmarkLAZFGLHash},lazfglhash{$endif}
+  {$ifdef benchmarkLAZXMLUtils},laz2_xmlutils{$endif}
   {$ifdef benchmarkGenerics}, Generics.Collections{$endif} //https://github.com/dathox/generics.collections
   {$ifdef benchmarkBEROsFLRE}, FLRE{$endif} //https://github.com/BeRo1985/flre/
   {$ifdef BENCHMARKBEROSPASMP}, PasMP{$endif} //https://github.com/BeRo1985/pasmp/
@@ -475,6 +477,40 @@ type TTestLazFPGHashTable = specialize TG_TestXXXX<
 
 {$endif}
 
+{$ifdef benchmarkLAZXMLUtils}
+type
+TLaz2XMLHashTable = class(laz2_xmlutils.THashTable)
+  constructor Create();
+end;
+TCallLazXMLHashTable = class
+  class procedure add(map: TLaz2XMLHashTable; const key: string; value: pointer); static; inline;
+  class function get(map: TLaz2XMLHashTable; const key: string): pointer; static; inline;
+  class function contains(map: TLaz2XMLHashTable; const key: string): boolean; static; inline;
+end;
+TTestLazXMLHashTable = specialize TG_TestXXXX<
+  TLaz2XMLHashTable,
+  TCallLazXMLHashTable, TCallLazXMLHashTable, TCallLazXMLHashTable, TObject
+>;
+constructor TLaz2XMLHashTable.create;
+begin
+  inherited create(10000,false);
+end;
+class procedure TCallLazXMLHashTable.add(map: TLaz2XMLHashTable; const key: string; value: pointer);
+begin
+  map.FindOrAdd(pchar(key), length(key))^.data := TObject(value);
+end;
+class function TCallLazXMLHashTable.get(map: TLaz2XMLHashTable; const key: string): pointer;
+var temp: PHashItem;
+begin
+  temp := map.Find(pchar(key), length(key));
+  if temp <> nil then result := temp^.data else result := nil;
+end;
+class function TCallLazXMLHashTable.contains(map: TLaz2XMLHashTable; const key: string): boolean;
+begin
+  result := map.Find(pchar(key), length(key)) <> nil;
+end;
+
+{$endif}
 
 {$ifdef benchmarkBEROsFLRE}
 type TTestFLRE = specialize TG_TestXDefaultXCast<TFLRECacheHashMap, specialize TG_CallAddXCast<TFLRECacheHashMap, TFLRECacheHashMapData>, TFLRECacheHashMapData>;
@@ -855,8 +891,9 @@ begin
     benchmark(mkArray, 'fgl.TFPGMap (sorted)', '* -> *', @TTestFPGMap.test);
     benchmark(mkArray, 'classes.TStringList_(sorted)', 'string -> TObject', @TTestStringList.test);
     {$ifdef benchmarkIniFiles}benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);{$endif}
-    {$ifdef benchmarkLAZFGLHash}benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);{$endif}
 
+    {$ifdef benchmarkLAZFGLHash}benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);{$endif}
+    {$ifdef benchmarkLAZXMLUTILS}benchmark(mkHash, 'laz2_xmlutils.THashTable', 'string -> TObject', @TTestLazXMLHashTable.test);{$endif}
 
     {$ifdef benchmarkGenerics}
     benchmark(mkHash, 'rtl-generics_linear', '* -> *', @TTestGenericLinear.test);
