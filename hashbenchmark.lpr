@@ -13,10 +13,11 @@ program hashbenchmark;
 {$define benchmarkYAMERsHashmap}
 {$define benchmarkBARRYKELLYsHashlist}
 {$define benchmarkCL4L}
-//{$define benchmarkFundamentals}
+{$define benchmarkFundamentals}
 {$define benchmarkLightContainers}
 {$define benchmarkDeCAL}
 {$define benchmarkJUHAsStringHashMap}
+//{$define benchmarkCustomMap}
 //{$define benchmarkKEALONsCL4FPC} conflicts with benchmarkCL4L as you cannot access generic hashmap when unit hashmap is used (#30646)
 
 {$ifdef benchmarkGenerics}
@@ -51,6 +52,8 @@ uses
   {$ifdef benchmarkDeCAL}, DeCAL{$endif}//from https://bitbucket.org/hovadur/decal
   {$ifdef benchmarkJUHAsStringHashMap},StrHashMap{$endif}//from http://wiki.freepascal.org/StringHashMap
   {$ifdef benchmarkKEALONsCL4FPC},hashmaps{$endif} //https://sourceforge.net/projects/cl4fpc/
+  {$ifdef benchmarkCustomMap},custommap{$endif} //add your own map !
+
   { you can add units after this };
 
 //set trees (usable as map with your own pair class): AvgLvlTree.TStringToStringTree, AVL_Tree
@@ -678,6 +681,11 @@ type
   TTestKealonsHashMap = specialize TG_TestXDefault<TMyKealonsHashMap>, specialize TG_CallDefault<TMyKealonsHashMap>>;
 {$endif}
 
+{$ifdef benchmarkCustomMap}
+type TTestCustomMap = specialize TG_TestXDefault<TCustomMap, specialize TG_CallAdd<TCustomMap>>;
+{$endif}
+
+
 class function TG_StringHash.c(const a, b: tstring): boolean;
 begin
   result := a < b;
@@ -922,6 +930,7 @@ begin
     {$ifdef benchmarkDeCAL}benchmark(mkHash, 'hovadur''s DeCAL ', '* -> *', @TTestDeCAL.test);{$endif}
     {$ifdef benchmarkJUHAsStringHashMap}benchmark(mkHash, 'JUHA''s StringHashMap', 'string -> pointer', @TTestJuhaStrHashMap.test);{$endif}
     {$ifdef benchmarkKEALONsCL4FPC}benchmark(mkHash, 'kealon''s CL4fpc', '* -> *', @TTestKealonsHashMap.test);{$endif}
+    {$ifdef benchmarkCustomMap}benchmark(mkHash, 'custom', '?', @TTestCustomMap.test);{$endif}
 
     if runMode <> rmDumpData then begin
       keycount := keycount + basekeycount;

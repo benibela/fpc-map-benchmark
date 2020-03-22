@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
   <ProjectOptions>
-    <Version Value="9"/>
+    <Version Value="11"/>
     <PathDelim Value="\"/>
     <General>
       <Flags>
@@ -22,20 +22,31 @@
     </PublishOptions>
     <RunParams>
       <local>
-        <FormatVersion Value="1"/>
         <CommandLineParams Value="--mode=multi-run"/>
       </local>
+      <FormatVersion Value="2"/>
+      <Modes Count="1">
+        <Mode0 Name="default">
+          <local>
+            <CommandLineParams Value="--mode=multi-run"/>
+          </local>
+        </Mode0>
+      </Modes>
     </RunParams>
     <RequiredPackages Count="1">
       <Item1>
         <PackageName Value="LCLBase"/>
       </Item1>
     </RequiredPackages>
-    <Units Count="1">
+    <Units Count="2">
       <Unit0>
         <Filename Value="hashbenchmark.lpr"/>
         <IsPartOfProject Value="True"/>
       </Unit0>
+      <Unit1>
+        <Filename Value="custommap.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit1>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -46,11 +57,6 @@
       <OtherUnitFiles Value="\home\benito\hg\components\pascal\data\;\home\benito\hg\programs\contests\euler\;\home\benito\hg\components\pascal\internet\;\home\benito\hg\components\lazarus\dialogs\;\home\benito\hg\components\pascal\system\;\home\benito\hg\components\pascal\import\regexpr\source\;..\..\..\components\pascal\import\gcontnrs;..\..\..\..\components\pascal\import\pasmp\src;..\..\..\..\components\pascal\import\barrykellyhash;\usr\local\lib\fpc\3.1.1\units\x86_64-linux\rtl-generics\;..\..\..\..\components\pascal\import\CL4L\Library;..\..\..\..\components\pascal\import\fundamentals5\Source\Utils;..\..\..\..\components\pascal\import\lightcontainers;..\..\..\..\components\pascal\import\decal;..\..\..\..\components\pascal\import\JuhaStuff\StrHashMap;..\..\..\..\components\pascal\import\Containers"/>
       <SrcPath Value="\home\benito\hg\components\pascal\import\synapse\;..\..\import\synapse"/>
     </SearchPaths>
-    <Parsing>
-      <SyntaxOptions>
-        <UseAnsiStrings Value="False"/>
-      </SyntaxOptions>
-    </Parsing>
     <CodeGeneration>
       <Optimizations>
         <OptimizationLevel Value="3"/>
