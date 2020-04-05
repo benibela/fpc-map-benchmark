@@ -17,6 +17,8 @@ program hashbenchmark;
 {$define benchmarkLightContainers}
 {$define benchmarkDeCAL}
 {$define benchmarkJUHAsStringHashMap}
+//{$define benchmarkBBHAMT}
+//{$define benchmarkBBHashmap}
 //{$define benchmarkCustomMap}
 //{$define benchmarkKEALONsCL4FPC} conflicts with benchmarkCL4L as you cannot access generic hashmap when unit hashmap is used (#30646)
 
@@ -52,6 +54,9 @@ uses
   {$ifdef benchmarkDeCAL}, DeCAL{$endif}//from https://bitbucket.org/hovadur/decal
   {$ifdef benchmarkJUHAsStringHashMap},StrHashMap{$endif}//from http://wiki.freepascal.org/StringHashMap
   {$ifdef benchmarkKEALONsCL4FPC},hashmaps{$endif} //https://sourceforge.net/projects/cl4fpc/
+  {$ifdef benchmarkBBHAMT},hamt.maps{$endif} //https://www.benibela.de/sources_en.html#hamt
+  {$ifdef benchmarkBBHashmap},xquery.internals.common{$endif} //https://www.benibela.de/sources_en.html#internettools (although currently only on http://github.com/benibela/internettools )
+
   {$ifdef benchmarkCustomMap},custommap{$endif} //add your own map !
 
   { you can add units after this };
@@ -681,6 +686,40 @@ type
   TTestKealonsHashMap = specialize TG_TestXDefault<TMyKealonsHashMap>, specialize TG_CallDefault<TMyKealonsHashMap>>;
 {$endif}
 
+{$ifdef benchmarkBBHAMT}
+type
+  TMutableMapStringPointer = specialize TMutableMap<string, pointer, THAMTTypeInfo>;
+  TTestBBHAMT = specialize TG_TestXXXX<TMutableMapStringPointer, specialize TG_CallInsert<TMutableMapStringPointer>,  specialize TG_CallGetDefault<TMutableMapStringPointer>, specialize TG_CallContains<TMutableMapStringPointer>,  pointer>;
+{$endif}
+
+{$ifdef benchmarkBBHashmap}
+type
+  TBBHashmap = class
+    map: specialize TXQHashmapStr<pointer>;
+    Constructor create;
+    procedure add(const key: string; value: pointer); inline;
+    function get(const key: string): pointer; inline;
+    property defaultget[const key: string]: pointer read get write add ; default;
+  end;
+constructor TBBHashmap.create;
+begin
+  map.init;
+end;
+
+procedure TBBHashmap.add(const key: string; value: pointer);
+begin
+  map.include(key, value);
+end;
+
+function TBBHashmap.get(const key: string): pointer;
+begin
+  result := map[key];
+end;
+type
+  TTestBBHashmap = specialize TG_TestXDefault<TBBHashmap, specialize TG_CallAdd<TBBHashmap>>;
+
+{$endif}
+
 {$ifdef benchmarkCustomMap}
 type TTestCustomMap = specialize TG_TestXDefault<TCustomMap, specialize TG_CallAdd<TCustomMap>>;
 {$endif}
@@ -930,6 +969,8 @@ begin
     {$ifdef benchmarkDeCAL}benchmark(mkHash, 'hovadur''s DeCAL ', '* -> *', @TTestDeCAL.test);{$endif}
     {$ifdef benchmarkJUHAsStringHashMap}benchmark(mkHash, 'JUHA''s StringHashMap', 'string -> pointer', @TTestJuhaStrHashMap.test);{$endif}
     {$ifdef benchmarkKEALONsCL4FPC}benchmark(mkHash, 'kealon''s CL4fpc', '* -> *', @TTestKealonsHashMap.test);{$endif}
+    {$ifdef benchmarkBBHAMT}benchmark(mkHash, 'BeniBela''s_HAMT', '* -> *', @TTestBBHAMT.test);{$endif}
+    {$ifdef benchmarkBBHashmap}benchmark(mkHash, 'BeniBela''s_Hashmap', '* -> *', @TTestBBHashmap.test);{$endif}
     {$ifdef benchmarkCustomMap}benchmark(mkHash, 'custom', '?', @TTestCustomMap.test);{$endif}
 
     if runMode <> rmDumpData then begin
