@@ -1,24 +1,28 @@
 #!/bin/bash
 if [[ -z "$1" ]]; then
-  mkdir -p /tmp/hashmarkcache
+  maxkeycount=80000000
 
+  echo Initializing data
+  mkdir -p /tmp/hashmarkcache
   if [[ ! -f /tmp/hashmarkcache/dics ]]; then 
     if [[ -d /usr/share/hunspell/ ]]; then dicpath=/usr/share/hunspell/; 
     elif [[ -d /usr/share/myspell/ ]]; then dicpath=/usr/share/myspell/;
     else echo no dics; exit;
     fi
     dics="$dicpath/de_DE.dic:$dicpath/en_US.dic"
-    ./hashbenchmark --sources=$dics  --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/dics
+    ./hashbenchmark --sources=$dics --maxkeycount=$maxkeycount --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/dics
   fi
   if [[ ! -f /tmp/hashmarkcache/200 ]]; then 
-    ./hashbenchmark --keylen=200  --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
+    ./hashbenchmark --keylen=200  --maxkeycount=$maxkeycount --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/200
   fi
   if [[ ! -f /tmp/hashmarkcache/8 ]]; then 
-    ./hashbenchmark --keylen=8  --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/8
+    ./hashbenchmark --keylen=8  --maxkeycount=$maxkeycount --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/8
   fi	
 
+  echo Benchmarking...
   mkdir -p results
   ./hashbenchmark --mode=list | while read map; do
+    echo Benchmarking map $map
     ./runhashbenchmark.sh "$map"
   done
   exit;

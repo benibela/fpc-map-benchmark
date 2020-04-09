@@ -765,7 +765,8 @@ type TReferenceHashmap = TFPHashList;
 
 var
   s: string;
-  i, j, basekeycount, maxkeycount: Integer;
+  i, j, basekeycount, maxkeycount: integer;
+  totalkeycount: Integer = 0;
   referenceHashmap: TReferenceHashmap;
   referenceConflict: boolean;
   addkeycount, oldkeycount, oldfailkeycount: integer;
@@ -909,15 +910,19 @@ begin
       end;
     end;
 
-    writeln(stderr, 'Data count: ', length(data), ' ', sourcefile, ' keylen: ', keylen, ' read/write: ', queryperkey, ' fail/write: ', failqueryperkey);
-    flushall;
 
     if dumpdatafn <> '' then begin
       if runMode <> rmDumpData then rewrite(dumpfile);
       for i := 0 to keycount - 1 do
         writeln(dumpfile, data[i]);
       flush(dumpfile);
+      totalkeycount += keycount;
+      writeln(stderr, 'key count: ', totalkeycount, ' ', sourcefile, ' keylen: ', keylen);
+    end else begin
+      totalkeycount := keycount;
+      writeln(stderr, 'key count: ', totalkeycount, ' ', sourcefile, ' keylen: ', keylen, ' read/write: ', queryperkey, ' fail/write: ', failqueryperkey);
     end;
+    flushall;
 
     if queryMode = qmFPCRandomQueryList then begin
       SetLength(randomqueries, keycount * (queryperkey + failqueryperkey));
@@ -980,7 +985,7 @@ begin
         basekeycount := basekeycount * 10;
       end;
     end;
-  until (runMode in [rmList, rmSingleRun]) or (keycount < 0) or (keycount > maxkeycount);
+  until (runMode in [rmList, rmSingleRun]) or (keycount < 0) or (totalkeycount > maxkeycount);
 
   referenceHashmap.Free;
   sources.free;
