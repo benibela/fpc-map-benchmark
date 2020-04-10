@@ -820,7 +820,7 @@ begin
   cmdline.declareInt('memlimit', 'mem limit (MB)', 1024);
   cmdline.declareInt('timelimit', 'time limit', 10*60*1000);
   cmdline.declareString('mode', ' list, single-run, multi-run', 'single-run');
-  cmdline.declareString('querymode', 'randomlist or xorshift', 'xorshift');
+  cmdline.declareString('querymode', 'random or xorshift', 'xorshift');
   cmdline.declareString('filter', ' Map to use', '');
   cmdline.declareString('dumpdata', 'Data inserted', '');
   cmdline.declareString('keyuniqueness', 'number, filter', 'number');
@@ -861,7 +861,7 @@ begin
     else {'single-run': }runmode := rmSingleRun;
   end;
   case cmdline.readString('querymode') of
-    'randomlsit': queryMode := qmFPCRandomQueryList;
+    'random': queryMode := qmFPCRandomQueryList;
     else {'xorshift': }querymode := qmXorShift;
   end;
   case cmdline.readString('keyuniqueness') of
