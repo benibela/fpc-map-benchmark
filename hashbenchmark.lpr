@@ -791,6 +791,8 @@ type TReferenceHashmap = TFPHashList;
   TReferenceHashmapContains = specialize TG_CallContainsGetNil<TFPHashList, specialize TG_CallGetFind<TFPHashList> >;
 {$endif}
 
+type TKeyUniqueness = (kuNumber, kuFilter);
+const KeyNumberCharacter = '!';
 var
   s: string;
   i, j, basekeycount, maxkeycount: integer;
@@ -804,6 +806,7 @@ var
   cmdline: TCommandLineReader;
   temps, sourcefile, dumpdatafn, cacheddatafn: string;
   sources,sources2: tstringlist;
+  keyUniqueness: TKeyUniqueness;
 begin
   cmdline := TCommandLineReader.create;
   cmdline.declareString('sources', 'Source file');
@@ -820,6 +823,7 @@ begin
   cmdline.declareString('querymode', 'randomlist or xorshift', 'xorshift');
   cmdline.declareString('filter', ' Map to use', '');
   cmdline.declareString('dumpdata', 'Data inserted', '');
+  cmdline.declareString('keyuniqueness', 'number, filter', 'number');
 
   timelimit := cmdline.readInt('timelimit');
   memlimit := int64(cmdline.readInt('memlimit')) * 1024 * 1024;
@@ -860,6 +864,16 @@ begin
     'randomlsit': queryMode := qmFPCRandomQueryList;
     else {'xorshift': }querymode := qmXorShift;
   end;
+  case cmdline.readString('keyuniqueness') of
+    'number': begin
+      keyuniqueness := kuNumber;
+      if sources <> nil then
+        for i := 0 to sources.count - 1 do
+          if pos(KeyNumberCharacter, sources[i]) > 0 then sources[i] := StringReplace(sources[i], KeyNumberCharacter, '_', [rfReplaceAll]);
+    end;
+    'filter': keyuniqueness := kuFilter;
+    else raise exception.create('Invalid argument: keyuniqueness')
+  end;
   dumpdatafn := cmdline.readString('dumpdata');
   if dumpdatafn <> '' then begin
     assignfile(dumpfile, dumpdatafn);
@@ -882,7 +896,7 @@ begin
   data := nil;
   faildata := nil;
 
-  if cacheddatafn = '' then referenceHashmap := TReferenceHashmap.create
+  if (cacheddatafn = '') and (keyUniqueness = kuFilter) then referenceHashmap := TReferenceHashmap.create
   else referenceHashmap := nil;
   repeat
     if failqueryperkey > 0 then failkeycount := max(100, keycount div 100)
@@ -899,32 +913,49 @@ begin
     SetLength(faildata, failkeycount);
     addkeycount := keycount - oldkeycount;
     //writeln(addkeycount, ' ', oldkeycount);
-    if referenceHashmap <> nil then begin
-      if (runMode <> rmDumpData) and (referenceHashmap.Capacity < keycount + failkeycount) then
-        if  (referenceHashmap.Capacity < 1000000) then
-          referenceHashmap.Capacity := (keycount + failkeycount) * 5
-         else
-           referenceHashmap.Capacity := keycount + failkeycount;
+    if cacheddatafn = '' then begin
+      if referenceHashmap <> nil then
+        if (runMode <> rmDumpData) and (referenceHashmap.Capacity < keycount + failkeycount) then
+          if  (referenceHashmap.Capacity < 1000000) then
+            referenceHashmap.Capacity := (keycount + failkeycount) * 5
+           else
+             referenceHashmap.Capacity := keycount + failkeycount;
       for i := 0 to keycount + failkeycount - 1 - oldkeycount - oldfailkeycount do begin
+        inc(totalkeycount);
         if sources <> nil then
           s := sources[i mod sources.count];
-        repeat
-          if sources = nil then begin
-            setlength(s, keylen);
-            for j := 1 to keylen do
-              s[j] := chr(Random(200)+32);
-          end else if referenceConflict then
-            s := s + chr(Random(200)+32);
-          while length(s) < keylen do
-            s := s + chr(Random(200)+32);
-          referenceConflict := TReferenceHashmapContains.contains(referenceHashmap, s);
-        until not referenceConflict;
+        case keyuniqueness of
+          kuNumber: begin
+            if sources <> nil then s := s + KeyNumberCharacter + inttostr(totalkeycount)
+            else begin
+              setlength(s, keylen);
+              for j := 1 to keylen - 4 do
+                s[j] := chr(Random(200)+32);
+              pinteger(@s[length(s) - 4 + 1])^ := totalkeycount xor $12345678;
+            end;
+          end;
+          kuFilter: begin
+            repeat
+              if sources = nil then begin
+                setlength(s, keylen);
+                for j := 1 to keylen do
+                  s[j] := chr(Random(200)+32);
+              end else if referenceConflict then
+                s := s + chr(Random(200)+32);
+              while length(s) < keylen do
+                s := s + chr(Random(200)+32);
+              referenceConflict := TReferenceHashmapContains.contains(referenceHashmap, s);
+            until not referenceConflict;
+          end;
+        end;
         if i < addkeycount then begin
           data[i + oldkeycount] := s;
-          TReferenceHashmapAdd.add(referenceHashmap, s, @data[i]); //these added pointers will become invalid after resizing
+          if referenceHashmap <> nil then
+            TReferenceHashmapAdd.add(referenceHashmap, s, @data[i]); //these added pointers will become invalid after resizing
         end else begin
           faildata[i - addkeycount + oldfailkeycount] := s;
-          TReferenceHashmapAdd.add(referenceHashmap, s, @faildata[i - addkeycount]);
+          if referenceHashmap <> nil then
+            TReferenceHashmapAdd.add(referenceHashmap, s, @faildata[i - addkeycount]);
         end;
       end;
     end else begin
@@ -944,10 +975,8 @@ begin
       for i := 0 to keycount - 1 do
         writeln(dumpfile, data[i]);
       flush(dumpfile);
-      totalkeycount += keycount;
       writeln(stderr, 'key count: ', totalkeycount, ' ', sourcefile, ' keylen: ', keylen);
     end else begin
-      totalkeycount := keycount;
       writeln(stderr, 'key count: ', totalkeycount, ' ', sourcefile, ' keylen: ', keylen, ' read/write: ', queryperkey, ' fail/write: ', failqueryperkey);
     end;
     flushall;
