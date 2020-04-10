@@ -689,7 +689,35 @@ type
 {$ifdef benchmarkBBHAMT}
 type
   TMutableMapStringPointer = specialize TMutableMap<string, pointer, THAMTTypeInfo>;
-  TTestBBHAMT = specialize TG_TestXXXX<TMutableMapStringPointer, specialize TG_CallInsert<TMutableMapStringPointer>,  specialize TG_CallGetDefault<TMutableMapStringPointer>, specialize TG_CallContains<TMutableMapStringPointer>,  pointer>;
+  TImmutableMapStringPointer = class(specialize TImmutableMap<string, pointer, THAMTTypeInfo>)
+    procedure fakeMutableInsert(const key: string; value: pointer);
+  end;
+
+  TImmutableMapAdder = class
+    class procedure add(map: TImmutableMapStringPointer; const key: string; value: pointer); static; inline;
+  end;
+  class procedure TImmutableMapAdder.add(map: TImmutableMapStringPointer; const key: string; value: pointer); static; inline;
+  begin
+    map.fakeMutableInsert(key, value);
+  end;
+  procedure TImmutableMapStringPointer.fakeMutableInsert(const key: string; value: pointer);
+  var c: TImmutableMapStringPointer;
+    tempcount: SizeUInt;
+    temproot: PHAMTNode;
+  begin
+    c := TImmutableMapStringPointer(insert(key, value));
+    tempcount := fcount;
+    temproot := froot;
+    froot := c.froot;
+    fcount := c.fcount;
+    c.froot := temproot;
+    c.fcount := tempcount;
+    c.free;
+  end;
+
+type
+  TTestBBHAMTMutable = specialize TG_TestXXXX<TMutableMapStringPointer, specialize TG_CallInsert<TMutableMapStringPointer>,  specialize TG_CallGetDefault<TMutableMapStringPointer>, specialize TG_CallContains<TMutableMapStringPointer>,  pointer>;
+  TTestBBHAMTImmutable = specialize TG_TestXXXX<TImmutableMapStringPointer, TImmutableMapAdder,  specialize TG_CallGetDefault<TImmutableMapStringPointer>, specialize TG_CallContains<TImmutableMapStringPointer>,  pointer>;
 {$endif}
 
 {$ifdef benchmarkBBHashmap}
@@ -974,7 +1002,8 @@ begin
     {$ifdef benchmarkDeCAL}benchmark(mkHash, 'hovadur''s DeCAL ', '* -> *', @TTestDeCAL.test);{$endif}
     {$ifdef benchmarkJUHAsStringHashMap}benchmark(mkHash, 'JUHA''s StringHashMap', 'string -> pointer', @TTestJuhaStrHashMap.test);{$endif}
     {$ifdef benchmarkKEALONsCL4FPC}benchmark(mkHash, 'kealon''s CL4fpc', '* -> *', @TTestKealonsHashMap.test);{$endif}
-    {$ifdef benchmarkBBHAMT}benchmark(mkHash, 'BeniBela''s_HAMT', '* -> *', @TTestBBHAMT.test);{$endif}
+    {$ifdef benchmarkBBHAMT}benchmark(mkHash, 'BeniBela''s HAMT mutable', '* -> *', @TTestBBHAMTMutable.test);{$endif}
+    {$ifdef benchmarkBBHAMT}benchmark(mkHash, 'BeniBela''s HAMT immutable', '* -> *', @TTestBBHAMTImmutable.test);{$endif}
     {$ifdef benchmarkBBHashmap}benchmark(mkHash, 'BeniBela''s_Hashmap', '* -> *', @TTestBBHashmap.test);{$endif}
     {$ifdef benchmarkCustomMap}benchmark(mkHash, 'custom', '?', @TTestCustomMap.test);{$endif}
 
