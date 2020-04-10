@@ -967,6 +967,7 @@ begin
         if eof(cacheddata) then begin writeln(stderr, 'data source exhausted'); flushall; halt; end;
         readln(cacheddata, faildata[i + oldfailkeycount]);
       end;
+      totalkeycount := length(data);
     end;
 
 
