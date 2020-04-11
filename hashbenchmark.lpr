@@ -795,11 +795,21 @@ type TKeyUniqueness = (kuNumber, kuFilter);
 const KeyNumberCharacter = '!';
 var
   s: string;
-  i, j, basekeycount, maxkeycount: integer;
+  i, j: integer;
+  {the benchmark needs a huge amount of keys.
+   keycount (defined above) is the current number of keys to insert in the map (length of data array) .
+   basekeycount is used when running multiple benchmarks for different keycounts. basekeycount many keys will be generated and added to data for the next benchmark.
+   maxkeycount is the maximum amount of keys to insert. After maxkeycount many keys have been generated, the program ends.
+   totalkeycount is the total number of keys generated for insertion. For a benchmark run, this is the same as keycount; when writing the keys to a file, keycount is the number of keys in memory (data array) and totalkeycount the sum of keys in memory plus those in the file.
+   totalkeyandfailkeycount is the total number of keys generated for insertion and failed lookup. (for failed lookups, it needs to generate keys are distinct of all inserted keys)
+  }
+  basekeycount, maxkeycount: integer;
   totalkeycount: Integer = 0;
+  totalkeyandfailkeycount: Integer = 0;
+  addkeycount, oldkeycount, oldfailkeycount: integer;
+
   referenceHashmap: TReferenceHashmap;
   referenceConflict: boolean;
-  addkeycount, oldkeycount, oldfailkeycount: integer;
 
   dumpfile, cacheddata : textfile;
 
@@ -921,17 +931,17 @@ begin
            else
              referenceHashmap.Capacity := keycount + failkeycount;
       for i := 0 to keycount + failkeycount - 1 - oldkeycount - oldfailkeycount do begin
-        inc(totalkeycount);
+        inc(totalkeyandfailkeycount);
         if sources <> nil then
           s := sources[i mod sources.count];
         case keyuniqueness of
           kuNumber: begin
-            if sources <> nil then s := s + KeyNumberCharacter + inttostr(totalkeycount)
+            if sources <> nil then s := s + KeyNumberCharacter + inttostr(totalkeyandfailkeycount)
             else begin
               setlength(s, keylen);
               for j := 1 to keylen - 4 do
                 s[j] := chr(Random(200)+32);
-              j := totalkeycount;
+              j := totalkeyandfailkeycount;
               s[length(s)] := chr((j mod 200) + 32); j := j div 200;
               s[length(s)-1] := chr((j mod 200) + 32); j := j div 200;
               s[length(s)-2] := chr((j mod 200) + 32); j := j div 200;
@@ -972,8 +982,8 @@ begin
         if eof(cacheddata) then begin writeln(stderr, 'data source exhausted'); flushall; halt; end;
         readln(cacheddata, faildata[i + oldfailkeycount]);
       end;
-      totalkeycount := length(data);
     end;
+    totalkeycount += addkeycount;
 
 
     if dumpdatafn <> '' then begin
