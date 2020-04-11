@@ -19,6 +19,8 @@ if [[ -z "$1" ]]; then
     ./hashbenchmark --keylen=8  --maxkeycount=$maxkeycount --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/8
   fi	
 
+  if swapon -s | grep .; then echo WARNING: swap memory detected. Disable it with swapoff -a, or the benchmarks will be very slow and the results useless; fi
+
   echo Benchmarking...
   mkdir -p results
   ./hashbenchmark --mode=list | while read map; do

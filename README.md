@@ -24,6 +24,8 @@ Compiling
 
 Just compile `hashbenchmark.lpr` with fpc or lazarus.
 
+You need to have my bbutils and rcmdline libraries in the source search path. 
+
 You need to have all maps that should be compiled in the source search path. The urls to download the maps are given in the uses section of hashbenchmark.lpr. You can disable not installed maps by disabling the corresponding define at the top of the file.
 
 Usage
@@ -59,7 +61,7 @@ Understanding the raw output
 
       mapname keycount time +- timestddev memory +- memorystddev
 
-`keycount` is the number of elements inserted in the map. `time` is the required time in milliseconds. `memory` is the memory usage in bytes. *stddev is the standard deviation of multiple runs on the same input (currently multiple runs are performed for low keycoutns, but the standard deviation calculation is disabled).
+`keycount` is the number of elements inserted in the map. `time` is the required time in milliseconds. `memory` is the memory usage in bytes. *stddev is the standard deviation of multiple runs on the same input (currently multiple runs are performed for low keycounts, but the standard deviation calculation is disabled, always printing 0).
 
 Before each line on stdout it writes the current parameters to stderr, for example:
 
