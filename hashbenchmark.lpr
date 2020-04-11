@@ -156,8 +156,9 @@ begin
   mean := 0;
   meanmemory := 0;
   result := true;
+  //Oversum: How often the benchmark function is run before measuring
   oversum := 1;
-  if keycount < 500 then oversum := 1000
+  if keycount < 500 then oversum := 1000        //repeat the benchmark 1000 times for small values
   else if keycount < 4000 then oversum := 100
   else if (keycount < 50000) and (kind = mkHash) then oversum := 10;
   for r := 1 to repcount do begin
@@ -168,7 +169,7 @@ begin
     timing[r] := round((now - tms)*MSecsPerDay);;
     memory[r] := (m.GetFPCHeapStatus().CurrHeapUsed - heapstatus.CurrHeapUsed) div oversum;
     for j := 1 to oversum do
-      maps[j].free;
+      maps[j].free; //free the map after benchmark to measure insertion time without freeing time
     if timing[r] > timelimit then begin
       writeln(stderr, name, ' time limit exceeded: ', round(timing[r]), ' > ', timelimit);
       flushall;
@@ -819,21 +820,24 @@ var
   keyUniqueness: TKeyUniqueness;
 begin
   cmdline := TCommandLineReader.create;
-  cmdline.declareString('sources', 'Source file');
+  cmdline.declareString('sources', 'Source file: list of keys');
   cmdline.declareString('cacheddata', 'Source file without duplicate lines', '');
-  cmdline.declareInt('keycount', 'keycount', 0);
-  cmdline.declareInt('basekeycount', 'basekeycount', 0);
-  cmdline.declareInt('maxkeycount', 'maxkeycount', high(integer));
-  cmdline.declareInt('keylen', 'keylen', 0);
-  cmdline.declareInt('queriesperkey', 'queryperkey', 100);
-  cmdline.declareInt('failqueriesperkey', 'failqueryperkey', 10);
-  cmdline.declareInt('memlimit', 'mem limit (MB)', 1024);
+  cmdline.declareInt('keycount', 'Number of keys to insert in the list', 0);
+  cmdline.declareInt('basekeycount', 'Increment to increase keycount for multiple runs', 0);
+  cmdline.declareInt('maxkeycount', 'Maximal number of keys to insert in the list, when performing multiple runs with different key sizes', high(integer));
+  cmdline.declareInt('keylen', 'Length of keys (minimum, shorter keys are extended)', 0);
+  cmdline.declareInt('queriesperkey', 'Number of succeeding lookups after each insertion', 100);
+  cmdline.declareInt('failqueriesperkey', 'Number of failing lookups after each insertion', 10);
+  cmdline.declareInt('memlimit', 'memory limit (MB)', 1024);
   cmdline.declareInt('timelimit', 'time limit', 10*60*1000);
-  cmdline.declareString('mode', ' list, single-run, multi-run', 'single-run');
-  cmdline.declareString('querymode', 'random or xorshift', 'xorshift');
-  cmdline.declareString('filter', ' Map to use', '');
-  cmdline.declareString('dumpdata', 'Data inserted', '');
-  cmdline.declareString('keyuniqueness', 'number, filter', 'number');
+  cmdline.declareString('mode', 'list: list of known maps. single-run: benchmark for a constant keycount. multi-run: benchmark for multiple keycounts.', 'single-run');
+  cmdline.addEnumerationValues(['list', 'single-run', 'multi-run']);
+  cmdline.declareString('querymode', 'Query for keys chosen by a xorshift RNG or from a precomputed list of (fpc''s) random indices.', 'xorshift');
+  cmdline.addEnumerationValues(['randomlist', 'xorshift']);
+  cmdline.declareString('filter', 'Map to use (use --mode list to get list of maps)', '');
+  cmdline.declareString('dumpdata', 'Write generated keys to this file.', '');
+  cmdline.declareString('keyuniqueness', 'Create unique keys by appending an index number (!) to each key or filter (!) random keys to remove duplicates.', 'number');
+  cmdline.addEnumerationValues(['number', 'filter']);
 
   timelimit := cmdline.readInt('timelimit');
   memlimit := int64(cmdline.readInt('memlimit')) * 1024 * 1024;
@@ -871,7 +875,7 @@ begin
     else {'single-run': }runmode := rmSingleRun;
   end;
   case cmdline.readString('querymode') of
-    'random': queryMode := qmFPCRandomQueryList;
+    'randomlist': queryMode := qmFPCRandomQueryList;
     else {'xorshift': }querymode := qmXorShift;
   end;
   case cmdline.readString('keyuniqueness') of
