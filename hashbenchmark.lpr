@@ -931,7 +931,12 @@ begin
               setlength(s, keylen);
               for j := 1 to keylen - 4 do
                 s[j] := chr(Random(200)+32);
-              pinteger(@s[length(s) - 4 + 1])^ := totalkeycount xor $12345678;
+              j := totalkeycount;
+              s[length(s)] := chr((j mod 200) + 32); j := j div 200;
+              s[length(s)-1] := chr((j mod 200) + 32); j := j div 200;
+              s[length(s)-2] := chr((j mod 200) + 32); j := j div 200;
+              s[length(s)-3] := chr((j mod 200) + 32); j := j div 200;
+              if j > 0 then raise exception.create('Key numbering exhausted');
             end;
           end;
           kuFilter: begin
