@@ -17,8 +17,10 @@ program hashbenchmark;
 {$define benchmarkLightContainers}
 {$define benchmarkDeCAL}
 {$define benchmarkJUHAsStringHashMap}
-//{$define benchmarkBBHAMT}
-//{$define benchmarkBBHashmap}
+{$define benchmarkBBHAMT}
+{$define benchmarkBBHashmap}
+{$define benchmarkCodaMinaHashMap}
+{$define benchmarkAVKLGenerics}
 //{$define benchmarkCustomMap}
 //{$define benchmarkKEALONsCL4FPC} conflicts with benchmarkCL4L as you cannot access generic hashmap when unit hashmap is used (#30646)
 
@@ -56,6 +58,8 @@ uses
   {$ifdef benchmarkKEALONsCL4FPC},hashmaps{$endif} //https://sourceforge.net/projects/cl4fpc/
   {$ifdef benchmarkBBHAMT},hamt.maps{$endif} //https://www.benibela.de/sources_en.html#hamt
   {$ifdef benchmarkBBHashmap},xquery.internals.common{$endif} //https://www.benibela.de/sources_en.html#internettools (although currently only on http://github.com/benibela/internettools )
+  {$ifdef benchmarkCodaMinaHashMap},CodaMinaHashMap{$endif} //https://github.com/terrylao/PascalContainer/
+  {$ifdef benchmarkAVKLGenerics},LGHashMap{$endif} //https://github.com/avk959/LGenerics/
 
   {$ifdef benchmarkCustomMap},custommap{$endif} //add your own map !
 
@@ -749,6 +753,53 @@ type
 
 {$endif}
 
+{$ifdef benchmarkCodaMinaHashMap}
+type TTestCodaMinaHashMap = specialize TG_TestAddDefault<specialize TCodaMinaHashMap<string, pointer>>;
+{$endif}
+
+{$ifdef benchmarkAVKLGenerics}
+type generic TTestAVK_GenericMap<TMap> = class(specialize TG_TestXXXX<TMap, specialize TG_CallAdd<TMap>,  specialize TG_CallGetDefault<TMap>, specialize TG_CallContains<TMap>,  pointer>);
+type
+  generic TAVKLiteHashMapWrapper<TLiteMap> = class
+    map: TLiteMap;
+    Constructor create;
+    procedure add(const key: string; value: pointer); inline;
+    function get(const key: string): pointer; inline;
+    function contains(const key: string): boolean; inline;
+    property defaultget[const key: string]: pointer read get write add ; default;
+  end;
+constructor TAVKLiteHashMapWrapper.create;
+begin
+  map.clear;
+end;
+
+procedure TAVKLiteHashMapWrapper.add(const key: string; value: pointer);
+begin
+  map.add(key, value);
+end;
+
+function TAVKLiteHashMapWrapper.get(const key: string): pointer;
+begin
+  result := map[key];
+end;
+
+function TAVKLiteHashMapWrapper.contains(const key: string): boolean;
+begin
+  result := map.contains(key);
+end;
+
+
+type TTestAVK_GHashMapLP = specialize TTestAVK_GenericMap<specialize TGHashMapLP<string, pointer>>;
+     TTestAVK_GHashMapLPT = specialize TTestAVK_GenericMap<specialize TGHashMapLPT<string, pointer>>;
+     TTestAVK_GHashMapQP = specialize TTestAVK_GenericMap<specialize TGHashMapQP<string, pointer>>;
+     TTestAVK_GChainHashMap = specialize TTestAVK_GenericMap<specialize TGChainHashMap<string, pointer>>;
+     TTestAVK_GOrderedHashMap = specialize TTestAVK_GenericMap<specialize TGOrderedHashMap<string, pointer>>;
+     TTestAVK_GThreadHashMapFG = specialize TTestAVK_GenericMap<specialize TGThreadHashMapFG<string, pointer>>;
+
+     TTestAVK_GLiteHashMapLP = specialize TTestAVK_GenericMap<specialize TAVKLiteHashMapWrapper<(specialize TGLiteHashMapLP<string, pointer, string>).TMap > >;
+     TTestAVK_GLiteChainHashMap = specialize TTestAVK_GenericMap<specialize TAVKLiteHashMapWrapper<(specialize TGLiteChainHashMap<string, pointer, string>).TMap> >;
+{$endif}
+
 {$ifdef benchmarkCustomMap}
 type TTestCustomMap = specialize TG_TestXDefault<TCustomMap, specialize TG_CallAdd<TCustomMap>>;
 {$endif}
@@ -1054,6 +1105,19 @@ begin
     {$ifdef benchmarkBBHAMT}benchmark(mkHash, 'BeniBela''s HAMT mutable', '* -> *', @TTestBBHAMTMutable.test);{$endif}
     {$ifdef benchmarkBBHAMT}benchmark(mkHash, 'BeniBela''s HAMT immutable', '* -> *', @TTestBBHAMTImmutable.test);{$endif}
     {$ifdef benchmarkBBHashmap}benchmark(mkHash, 'BeniBela''s_Hashmap', '* -> *', @TTestBBHashmap.test);{$endif}
+
+    {$ifdef benchmarkCodaMinaHashMap}benchmark(mkHash, 'terrylao''s CodeMinaHashMap', '* -> *', @TTestCodaMinaHashMap.test);{$endif}
+    {$ifdef benchmarkAVKLGenerics}
+    benchmark(mkHash, 'avk959''s GHashMapLP', '* -> *', @TTestAVK_GHashMapLP.test);
+    benchmark(mkHash, 'avk959''s GHashMapLPT', '* -> *', @TTestAVK_GHashMapLPT.test);
+    benchmark(mkHash, 'avk959''s GHashMapQP', '* -> *', @TTestAVK_GHashMapQP.test);
+    benchmark(mkHash, 'avk959''s GChainHashMap', '* -> *', @TTestAVK_GChainHashMap.test);
+    benchmark(mkHash, 'avk959''s GOrderedHashMap', '* -> *', @TTestAVK_GOrderedHashMap.test);
+    benchmark(mkHash, 'avk959''s GThreadHashMapFG', '* -> *', @TTestAVK_GThreadHashMapFG.test);
+    benchmark(mkHash, 'avk959''s GLiteHashMapLP', '* -> *', @TTestAVK_GLiteHashMapLP.test);
+    benchmark(mkHash, 'avk959''s GLiteChainHashMap', '* -> *', @TTestAVK_GLiteChainHashMap.test);
+    {$endif}
+
     {$ifdef benchmarkCustomMap}benchmark(mkHash, 'custom', '?', @TTestCustomMap.test);{$endif}
 
     if runMode <> rmDumpData then begin
