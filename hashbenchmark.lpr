@@ -882,7 +882,7 @@ begin
   cmdline.declareInt('memlimit', 'memory limit (MB)', 1024);
   cmdline.declareInt('timelimit', 'time limit', 10*60*1000);
   cmdline.declareString('mode', 'list: list of known maps. single-run: benchmark for a constant keycount. multi-run: benchmark for multiple keycounts.', 'single-run');
-  cmdline.addEnumerationValues(['list', 'single-run', 'multi-run']);
+  cmdline.addEnumerationValues(['list', 'single-run', 'multi-run', 'dumpdata']);
   cmdline.declareString('querymode', 'Query for keys chosen by a xorshift RNG or from a precomputed list of (fpc''s) random indices.', 'xorshift');
   cmdline.addEnumerationValues(['randomlist', 'xorshift']);
   cmdline.declareString('filter', 'Map to use (use --mode list to get list of maps)', '');
