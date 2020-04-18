@@ -6,7 +6,7 @@ program hashbenchmark;
 {$define benchmarkGenerics}
 {$define benchmarkGenericsQuadraticProbing}
 //{$define benchmarkIniFiles} just a wrapper around TFPDataHashTable
-{$define benchmarkLAZFGLHash} //test failed.
+{$define benchmarkLAZFGLHash}
 {$define benchmarkLAZXMLUtils}
 {$define benchmarkBEROsFLRE}
 {$define benchmarkBEROsPASMP}
@@ -77,9 +77,16 @@ begin
   flush(stderr);
 end;
 
-procedure fail;
+procedure failLookup;
 begin
-  writeln(stderr, 'failed');
+  writeln(stderr, 'failed lookup');
+  flushall();
+  halt;
+end;
+
+procedure failFalseInclusion;
+begin
+  writeln(stderr, 'failed, found item that was not inserted');
   flushall();
   halt;
 end;
@@ -359,11 +366,11 @@ begin
     case queryMode of
       qmFPCRandomQueryList: begin
         for j := 0 to queryperkey - 1 do begin
-          if TGetter.get(map, data[randomqueries[q]]) <> @data[randomqueries[q]] then fail;
+          if TGetter.get(map, data[randomqueries[q]]) <> @data[randomqueries[q]] then failLookup;
           inc(q);
         end;
         for j := 0 to failqueryperkey - 1 do begin
-          if TContains.contains(map, faildata[randomqueries[q]]) then fail;
+          if TContains.contains(map, faildata[randomqueries[q]]) then failFalseInclusion;
           inc(q);
         end;
       end;
@@ -371,13 +378,13 @@ begin
         for j := 1 to queryperkey do begin
           q := xorshift mod (i + 1);
           //writeln(stderr, i, '<',q, ' ',data[q]);
-          if TGetter.get(map, data[q]) <> @data[q] then fail;
+          if TGetter.get(map, data[q]) <> @data[q] then failLookup;
           updateXorShift(xorshift);
         end;
         for j := 1 to failqueryperkey do begin
           q := xorshift mod failkeycount;
           //writeln(stderr, i, '>',faildata[q]); flush(stderr);
-          if TContains.contains(map, faildata[q]) then fail;
+          if TContains.contains(map, faildata[q]) then failFalseInclusion;
           updateXorShift(xorshift);
         end;
       end;
@@ -470,7 +477,7 @@ begin
   for i := 0 to keycount - 1 do begin
     map.Add(data[i], i);
     for j := 0 to queryperkey - 1 do begin
-      if map.ValueOf(data[randomqueries[q]]) <> randomqueries[q] then fail;
+      if map.ValueOf(data[randomqueries[q]]) <> randomqueries[q] then failLookup;
       inc(q);
     end;
   end;
@@ -1106,7 +1113,7 @@ begin
     {$ifdef benchmarkBBHAMT}benchmark(mkHash, 'BeniBela''s HAMT immutable', '* -> *', @TTestBBHAMTImmutable.test);{$endif}
     {$ifdef benchmarkBBHashmap}benchmark(mkHash, 'BeniBela''s_Hashmap', '* -> *', @TTestBBHashmap.test);{$endif}
 
-    {$ifdef benchmarkCodaMinaHashMap}benchmark(mkHash, 'terrylao''s CodeMinaHashMap', '* -> *', @TTestCodaMinaHashMap.test);{$endif}
+    {$ifdef benchmarkCodaMinaHashMap}benchmark(mkHash, 'terrylao''s CodaMinaHashMap', '* -> *', @TTestCodaMinaHashMap.test);{$endif}
     {$ifdef benchmarkAVKLGenerics}
     benchmark(mkHash, 'avk959''s GHashMapLP', '* -> *', @TTestAVK_GHashMapLP.test);
     benchmark(mkHash, 'avk959''s GHashMapLPT', '* -> *', @TTestAVK_GHashMapLPT.test);
