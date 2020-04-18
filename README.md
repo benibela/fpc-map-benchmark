@@ -69,3 +69,12 @@ Before each line on stdout it writes the current parameters to stderr, for examp
       
 meaning 20000000 keys are inserted in the map. After each insertion 100 successful lookups and 10 failed lookups are performed. 
 
+
+Todo
+------------------------
+
+* Test different hash functions. 
+
+* Measure deletion time, of single elements and of clearing all elements. As well as enumeration time.
+
+* Different insertion/query strategies, e.g. insert everything and then query instead alternating insertion/query.

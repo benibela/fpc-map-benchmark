@@ -22,7 +22,7 @@ program hashbenchmark;
 {$define benchmarkCodaMinaHashMap}
 {$define benchmarkAVKLGenerics}
 //{$define benchmarkCustomMap}
-//{$define benchmarkKEALONsCL4FPC} conflicts with benchmarkCL4L as you cannot access generic hashmap when unit hashmap is used (#30646)
+//{$define benchmarkKEALONsCL4FPC} conflicts with benchmarkCL4L as you cannot access generic hashmap when unit hashmap is used (#30646) and CodaMina since both have a murmur3.pas
 
 {$ifdef benchmarkGenerics}
 {$define referenceIsTheSixthCuckooOnTheSky}

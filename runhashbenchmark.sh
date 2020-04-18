@@ -19,7 +19,7 @@ if [[ -z "$1" ]]; then
     ./hashbenchmark --keylen=8  --maxkeycount=$maxkeycount --keycount=100000 --failqueriesperkey=0 --mode=dumpdata --dumpdata=/tmp/hashmarkcache/8
   fi	
 
-  if swapon -s | grep .; then echo WARNING: swap memory detected. Disable it with swapoff -a, or the benchmarks will be very slow and the results useless; fi
+  if swapon -s | grep . > /dev/null; then echo WARNING: swap memory detected. Disable it with swapoff -a, or the benchmarks will be very slow and the results useless; fi
 
   echo Benchmarking...
   mkdir -p results
@@ -44,7 +44,9 @@ function run(){
     keycount=$(tail -n 1 $result | tail -1 | cut -f 2 -d' ')
     basekeycount=$(sed -e 's/[^0]/1/' <<<$keycount)  
   fi
+  echo Test set $result
   ./hashbenchmark $args $cache --keycount=$keycount --basekeycount=$basekeycount --queriesperkey $queriesperkey --failqueriesperkey $failqueriesperkey >> $result
+  echo
 }
 
 run dics 0 0

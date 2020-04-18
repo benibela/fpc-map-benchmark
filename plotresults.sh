@@ -8,22 +8,34 @@ cat <<EOF
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="canonical" href="http://www.benibela.de/fpc-map-benchmark_en.html">    
-    <script src="js/Chart.min.js"></script>
+    <script src="js/Chart-2.9.3.min.js"></script>
+    <link rel="stylesheet" href="css/Chart-2.9.3.css">
+    <style>.prefix { min-width: 8.5em; display: inline-block }</style>
     
     <body>
      <h1>Free Pascal hash maps</h1>
-     <h2>One Benchmark to Rule Them All</h2>
           
      This is an exhausive benchmark of string-key based (hash)maps available for Free Pascal.
           
-     <p><b>Maps to compare:</b> <button onclick="autocheck('map_', true)">all</button><button onclick="autocheck('map_', false)">none</button>
+     <p><b>Maps to compare:</b> <button onclick="autocheck('map_', true)">all</button><button onclick="autocheckshortstring(true)">all except shortstring</button><button onclick="autocheckshortstring(false)">no shortstring</button><button onclick="autocheck('map_', false)">none</button>
+     
+     <br><em>built-in:</em>
      
      $(lastunit=""; ./hashbenchmark --mode=list | while read map; do
-       unit=$(grep -oE '^[^. _]+' <<<"$map")
-       if [[ $unit != $lastunit ]]; then echo '<br>'; fi
+       prettyname=$(tr _ ' ' <<<"$map" | sed -e "s/s /'s /")
+       unit=$(grep -oE '^[^. _]+' <<<"$prettyname")
+       if [[ $unit != $lastunit ]]; then 
+         prefix=$(grep -oE "^([^']+'s +|[^.]+[.])" <<<"$prettyname")
+         echo '<br><span class="prefix">'$prefix'</span>' 
+       fi
        lastunit=$unit;
        if [[ $map =~ contnrs|ghashmap|gmap|rtl-generic ]] && [[ ! $map =~ shortstring ]]; then checked="checked"; else checked=""; fi
-       echo '<input type="checkbox" name="map_'$map'" '$checked'>'$(tr _ ' ' <<<"$map" | sed -e "s/s /'s /");
+       if [[ $prettyname = "rtl-generic's linear.shortstring" ]]; then echo '<br><span class="prefix"></span>'; fi
+       echo '<input type="checkbox" name="map_'$map'" '$checked'>'${prettyname#"$prefix"};
+       if [[ $prettyname = "rtl-generic's linear" ]]; then echo ' (TDictionary)'; 
+       elif [[ $prettyname = "rtl-generic's cuckoo6.shortstring" ]]; then echo '<br><em>3rd party:</em>'; 
+       elif [[ $prettyname = "BeniBela's Hashmap" ]]; then echo ' (XQuery)'; 
+       fi
      done )
      
      <p><b>Datasets:</b> 
@@ -67,23 +79,26 @@ cat <<EOF
   
   <h4>Good built-in maps:</h4>
   <ul>
-  <li>For small keys, TFPHashList is the fastest map of all maps provided by FreePascal. However, for longer keys or dozens of lookups the performances degrades drastically. It uses shortstrings, so there is a hard-limit of 256 byte keys (which can also explain the lookup slowdown, as the benchmark uses ansistrings), and it seems to copy all strings, as its memory usage is very low for small keys, but also increases drastically with the key length. </li>
+  <li>For small keys, TFPHashList is the fastest map of all maps provided by FreePascal. However, for longer keys or dozens of lookups the performances degrades drastically. It uses shortstrings, so there is a hard-limit of 256 byte keys (which can also explain the lookup slowdown, as the benchmark uses ansistrings), and it seems to copy all strings, as its memory usage is very low for small keys, but also increases drastically with the key length.<br/> 
+  The extreme performance drop at higher key counts might occur, because the computer ran out of memory and used the swap file. </li>
   
-  <li>The maps of the rtl-generic.collections package can be classified in two groups: non-cuckoo maps (linear, double hashing) and cuckoo maps. <ul>
-  <li>With the parameters actually used in this benchmark, the non-cuckoo maps are always faster than the cuckoo map or other maps. Slightly slower than TFPHashList for small keys, but faster for long keys. The linear map appears to be slightly faster than the double hashing one (at least when the keys are truly random). </li>  
-  <li>When the number of reads increases to a few dozen queries/key, the cuckoo maps will be faster than the non-cuckoo maps (shown by the difference between writing and reading speed). They also use less memory and especially cuckoo-6 is the most memory efficient hash map of them all, but also the slowest. Cuckoo-2 is the fastest cuckoo-map, but uses nearly the same memory as the non-cuckoo maps. Cuckoo-4 is in-between. </li></ul></li>
+  <li>The maps of the rtl-generic.collections package can be classified in two groups: non-cuckoo maps (linear, quadratic, double hashing) and cuckoo maps. <ul>
+  <li>With the parameters actually used in this benchmark, the non-cuckoo maps are always faster than the cuckoo map or other maps. Slightly slower than TFPHashList for small keys, but faster for long keys. The linear map appears to be slightly faster than the double hashing one (at least when the keys are truly random). The quadratic map is often faster than the linear map, but it was broken in older fpc versions, so it should only be used with fpc 3.2 or newer. The linear map is also called <code>TDictionary</code>. </li>  
+  <li>When the number of reads increases to a few dozen queries/key, the cuckoo maps will be faster than the non-cuckoo maps (shown by the difference between writing and reading speed. Cuckoo-2 is predicted to become faster than any other built-in map). They also use less memory and especially cuckoo-6 is the most memory efficient hash map of them all, but also the slowest. Cuckoo-2 is the fastest cuckoo-map, but uses nearly the same memory as the non-cuckoo maps. Cuckoo-4 is in-between. </li></ul></li>
   </li>
   
   </ul>
   <h4>Good 3rd-party maps:</h4>
   
-  Generally, all 3rd-party maps perform well, but two are especially notable as they are faster than the fpc provided maps in most situations:
+  Generally, all 3rd-party maps perform well, but some are especially notable as they are faster than the fpc provided maps in most situations:
   
   <ul>
-  <li>  <a href="http://yann.merignac.free.fr/unit-gcontnrs.html">Yamer's TGenHashMap</a> in the gcontnrs package is faster and uses less memory than the non-cuckoo maps, but requires more memory than the memory-efficient cuckoo-maps. For small keys its characterists even matches TFPHashList.
+  <li> <a href="https://github.com/avk959/LGenerics">avk959's LGenerics</a> are overall the fastest maps in the benchmark. For insertions only, GLiteChainHashMap is the fastest, followed by GOrderedHashMap and GChainHashMap. However, for lookups there is a turning point at around 100 000 keys, where the GHashMapLP, GHashMapLPT, GHashMapQP and GLiteHashMapLP maps become the fastest maps. They are faster than rtl generics; and faster than TFPHashList, except in the case of only writing short keys. Unfortunately, these maps require fpc 3.2. </li>
+  <li>  <a href="http://yann.merignac.free.fr/unit-gcontnrs.html">Yamer's TGenHashMap</a> in the gcontnrs package is fast and memory efficient. It is faster than the rtl generics maps for short keys, and in-between for long keys. Similarly, its memory usage is between the best and worst maps of rtl generics. For short keys, it behaves similar to the maps of avk959 with better memory usage; for long keys, it is slower.  <!-- and uses less memory than the non-cuckoo maps, but requires more memory than the memory-efficient cuckoo-maps. <!--Its insertion speed is slower than TFPHashList, but for less than 200 000 small keys the insertion performance is better than avk959's GLiteHashMapLP and worse than GLiteChainHashMap. The lookup performance is better than the one of TFPHashList, but worse than GLiteHashMapLP, but for short keys better than .-->
   </li>
-  <li>  <a href="https://github.com/BeRo1985/flre/">Bero's FLRE cache map</a> is an internal used map in the FLRE-package, so it is not the easiest map to use. It is the fastest map for long keys, and similar to TFPHashList and Yamer's map for short keys. However, it has slightly higher memory usage.
+  <li>  <a href="https://github.com/BeRo1985/flre/">Bero's FLRE cache map</a> is an internally used map in the FLRE-package, so it is not the easiest map to use. It is similar to TFPHashList, avk959's LGenerics and Yamer's map for short keys, and used to be the fastest map for long keys in older versions of the benchmark. However, it has slightly higher memory usage. A closer examination of its code shows that it uses a very fast hash function, so the performance might come from the hash function not the map construction. It does not handle deletions well and keeps memory unfreed till the next resize. Currently it keeps items in insertion-order, but there is no guarantee of that.
   </li>
+  <li> <a href="https://github.com/benibela/internettools">BeniBela's Hashmap</a> is my own map used in the internet tools. It is just a modification of Bero's FLRE cache map to support generic types, so it behaves the same. However, it does not use Bero's fast hashfunction, so it is worse on long keys. On the other hand, it uses less memory. </li>
   </ul>
   
   <h4>Other built-in maps:</h4>
@@ -91,12 +106,14 @@ cat <<EOF
   <ul>
   <li>The array based TStringList and TFPGMap are the most memory efficient, using less memory than even the cuckoo maps. However, as they are not hash maps, their usage is extremely slow, even if the maps are sorted, so they are nearly useless as maps. Their default setting of unsorted and (in case of TStringList) case-insensitive matching are quite dangerous. </li>
   
-  <li>ghashmap is as fast as the rtl-generics map for short keys, but similar to TFPHashList its performance degrades with longer keys. Unlike TFPHashList it is not the fastest before the slow-down afterwards, so it becomes one of the slowest. It also has a high memory usage.</li>
+  <li>ghashmap is as fast as the rtl-generics maps for short keys, but similar to TFPHashList its performance degrades with longer keys. Unlike TFPHashList it is not the fastest before the slow-down afterwards, so it becomes one of the slowest. It also has a high memory usage. </li>
 
   <li>gmap.TMap is a slow map, because it is implemented as tree.</li>
   
   <li>TFPDataHashTable (as well as TLazFPGHashTable)  is an interesting map. At first it appears very fast, but with more elements it becomes very slow. The explanation is that it has a high-default capacity of around 200 000 items and does not grow. Colliding items are stored in a tree-structure, which becomes inefficient as soon as the initial capacity is exceeded.  </li>
   
+  <li>laz2_xmlutils.THashTable is also very peculiar. It begins slowly; but around 100 to 10 000 items, it is the fastest built-in map; then it becomes slower than TFPHashList; but, for more than 100 000 items, it is again often the fastest built-in map. However, there is a big difference between read and write speed, so it is predicted to become one of the slowest map for a lot of lookups. Generally, it behaves similarly to TFPHashList, although with slower insertion speed, but faster lookup speed. It also has high memory usage.<br>
+  Its most important feature is that it supports lookups of pchars, e.g. to lookup individual words of a sentence, without making copies of each word.</li>
     
   </ul>
 
@@ -117,7 +134,7 @@ cat <<EOF
   If this page is too slow, you can uncheck all checkboxes in a category, then no plots are shown and selections are instantanously. You can also disable maps by clicking their name on the legend without affecting other plots.
   Some maps have no datapoints for high key count, then only points with low key counts are shown and the map might appear more efficient than it is in the scatter plot. Move the mouse over the data points to check. 
   
-  <br><br>This benchmark was compiled with freepascal 3.1.1 (r35800) and run on a 64-bit Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz openSUSE 12.2 system. <a href="fpc-map-benchmark-r34557_en.html">older version</a>
+  <br><br>This benchmark was compiled with freepascal 3.3.1 (r44126), -O3, and run on a 64-bit Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz openSUSE 12.2 system. Older versions: <a href="fpc-map-benchmark-r34557_en.html">fpc 3.1.1 (r35800)</a>, <a href="fpc-map-benchmark-r34557_en.html">fpc 3.1.1 (r34557)</a>
   
        <script>
 EOF
@@ -139,6 +156,8 @@ done
 echo '];'
 
 cat <<EOF
+  String.prototype.contains = function(s){ return this.indexOf(s) >= 0 } 
+
   var data = {};
   for (var i=0;i<rawdata.length;i++) {
     var row = rawdata[i];
@@ -245,6 +264,12 @@ cat <<EOF
 
   function autocheck(prefix, state){
     boxes(prefix).map(function(cb){cb.checked = state;})
+    regen()
+  }
+  function autocheckshortstring(enableothers){
+    var bs = boxes("map_")
+    if (enableothers) bs.map(function(cb){cb.checked = true;})
+    bs.map(function(cb){if (cb.name.contains("shortstring") || cb.name.contains("TFPHashList")) cb.checked = false;})
     regen()
   }
   
@@ -393,7 +418,9 @@ cat <<EOF
                     text: sourcetext + " " + modeltext + (model == "pred" ? "estimate for " + writes+","+queriesperkey+","+failqueriesperkey:"") + " " + metrics[metric*4],
                     titleFontColor: "black"
                 },
-          tooltips: {callbacks: {
+          tooltips: {
+            mode: 'point', 
+            callbacks: {
             afterLabel: function(ti){
              // console.log 	(data.toSource())
               var p = basedatasets[ti.datasetIndex][ti.index + basedatasetsoffset[ti.datasetIndex]];
