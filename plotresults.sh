@@ -36,7 +36,7 @@ cat <<EOF
        elif [[ $prettyname = "rtl-generic's cuckoo6.shortstring" ]]; then echo '<br><em>3rd party:</em>'; 
        elif [[ $prettyname = "BeniBela's Hashmap" ]]; then echo ' (XQuery)'; 
        fi
-     done )
+     done )<br>
      
      <p><b>Datasets:</b> 
      <input type="checkbox"  name="ds_dics" checked> Dictionary words (~16 characters)
@@ -45,8 +45,8 @@ cat <<EOF
      
      <p><b>Model:</b> <sup>(writes,succeeding lookups,failed lookups)</sup>
      <input type="checkbox"  name="model_1_0_0">Only writes <sup>(1,0,0)</sup>
-     <input type="checkbox"  name="model_1_3_3" checked> Balanced <sup>(1,3,3)</sup>
-     <input type="checkbox"  name="model_1_20_2">Many Reads <sup>(1,20,2)</sup>
+     <input type="checkbox"  name="model_1_3_3"> Balanced <sup>(1,3,3)</sup>
+     <input type="checkbox"  name="model_1_20_2" checked>Many Reads <sup>(1,20,2)</sup>
      <input type="checkbox"  name="model_1_2_20">Many Failed Lookups <sup>(1,2,20)</sup>
      <input type="checkbox"  name="model_pred">Custom prediction: <input id="pred_write" value="1" size=5 oninput="regen()">, <input id="pred_read" value="100" size=5 oninput="regen()">, <input id="pred_fail" value="100" size="5" oninput="regen()">
 
@@ -55,12 +55,20 @@ cat <<EOF
      <input type="checkbox"  name="metric_1"> absolute memory (bytes)
      <input type="checkbox"  name="metric_2" checked> keys / time 
      <input type="checkbox"  name="metric_3" checked> keys / memory
-     <input type="checkbox"  name="metric_4" checked> time, memory
+     <input type="checkbox"  name="metric_4"> time, memory
      <input type="checkbox"  name="metric_5"> memory, time
      <input type="checkbox"  name="metric_6"> time / memory
      <input type="checkbox"  name="metric_7"> memory / time
      <input type="checkbox"  name="metric_8"> time / keys 
-     <input type="checkbox"  name="metric_9"> memory / keys
+     <input type="checkbox"  name="metric_9"> memory / keys<br>
+     bubbles: 
+     <input type="checkbox"  name="metric_10"> absolute time (abs. memory)
+     <input type="checkbox"  name="metric_11"> abs. memory (abs. time)
+     <input type="checkbox"  name="metric_12"> keys/time (keys/memory)
+     <input type="checkbox"  name="metric_13"> memory/ keys (keys/time)
+     <input type="checkbox"  name="metric_14" checked> keys/time (memory/keys)
+     <input type="checkbox"  name="metric_15"> memory/keys (time/keys) <br>
+     ranking: <input type="checkbox"  name="ranking_0"> time <input type="checkbox"  name="ranking_1"> memory
 
      <p><b>x-axis:</b> 
      <input type="checkbox"  name="xaxis_linear"> linear
@@ -72,7 +80,7 @@ cat <<EOF
 
      &nbsp;&nbsp;&nbsp;&nbsp;<b>keys limit:</b> 
      <input id="key_min" value="1000" oninput="regen()"> to
-     <input id="key_max" value="1000000000" oninput="regen()">  
+     <input id="key_max" value="100000000" oninput="regen()">  
 
   <div id="plotoutput"></div>
   <h3>General observations:</h3>
@@ -180,34 +188,139 @@ cat <<EOF
   var metricKeysLabel = "keys";
   var metricMemoryLabel = "memory (bytes)";
   var metricTimeLabel = "time (ms)";
+  var axes = {"time": {"label": metricTimeLabel},
+              "memory": {"label": metricMemoryLabel},
+              "keys": {"label": metricKeysLabel}
+             }
   var metrics = [
-    "absolute time (lower is better)",   metricKeysLabel,   metricTimeLabel, function(d) { return {x: d.x, y:  d.t}; },
-    "absolute memory (lower is better)", metricKeysLabel,   metricMemoryLabel, function(d) { return {x: d.x, y:  d.m}; },
-    "keys / time (higher is better)",     metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.x / Math.max(0.001,d.t)} },
-    "keys / memory (higher is better)",   metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.x / Math.max(1,d.m)} },
-    "time , memory (bottom left is best)",   metricTimeLabel,   metricMemoryLabel, function(d){ return {x: d.t, y:  d.m, k: d.x} },
-    "memory , time (bottom left is best)",   metricMemoryLabel, metricTimeLabel, function(d){ return {x: d.m, y:  d.t, k: d.x} },
-    "time / memory",   metricMemoryLabel, "", function(d){ return {x: d.m, y:  d.t / Math.max(1,d.m), k: d.x} },
-    "memory / time",   metricTimeLabel,   "", function(d){ return {x: d.t, y:  d.m / Math.max(0.001,d.t), k: d.x} },
-    "time / keys (lower is better)",     metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.t / Math.max(1,d.x), k: d.x} },
-    "memory / keys (lower is better)",   metricKeysLabel,   "", function(d){ return {x: d.x, y:  d.m / Math.max(1,d.x), k: d.x} },
+    {title: "absolute time (lower is better)",   
+     xAxes: axes.keys,
+     yAxes: axes.time, 
+     datamap: function(d) { return {x: d.x, y:  d.t}; }},
+    {title: "absolute memory (lower is better)", 
+     xAxes: axes.keys,   
+     yAxes: axes.memory,
+     datamap: function(d) { return {x: d.x, y:  d.m}; }},
+    {title: "keys / time (higher is better)",    
+     xAxes: axes.keys,   
+     yAxesLabel: "",
+     datamap: function(d){ return {x: d.x, y:  d.x / Math.max(0.001,d.t)} }},
+    {title: "keys / memory (higher is better)",  
+     xAxes: axes.keys,
+     yAxesLabel: "",
+     datamap: function(d){ return {x: d.x, y:  d.x / Math.max(1,d.m)} }},
+    {title: "time , memory (bottom left is best)",   
+     xAxes: axes.time,
+     yAxes: axes.memory,
+     datamap: function(d){ return {x: d.t, y:  d.m, k: d.x} }},
+    {title: "memory , time (bottom left is best)", 
+     xAxes: axes.memory, 
+     yAxes: axes.time,
+     datamap: function(d){ return {x: d.m, y:  d.t, k: d.x} }},
+    {title: "time / memory",
+     xAxes: axes.memory, 
+     yAxesLabel: "", 
+     datamap: function(d){ return {x: d.m, y:  d.t / Math.max(1,d.m), k: d.x} }},
+    {title: "memory / time",
+     xAxes: axes.time,
+     yAxesLabel: "", 
+     datamap: function(d){ return {x: d.t, y:  d.m / Math.max(0.001,d.t), k: d.x} }},
+    {title: "time / keys (lower is better)",
+     xAxes: axes.keys,
+     yAxesLabel: "",
+     datamap: function(d){ return {x: d.x, y:  d.t / Math.max(1,d.x), k: d.x} }},
+    {title: "memory / keys (lower is better)",
+     xAxes: axes.keys,
+     yAxesLabel: "",
+     datamap: function(d){ return {x: d.x, y:  d.m / Math.max(1,d.x), k: d.x} }},
+     
+    {title: "keys, time, (memory) (lower and smaller is better)",
+     type: "bubble",
+     xAxes: axes.keys,
+     yAxes: axes.time,
+     datamap: function(d){ return {x: d.x, y:  d.t, r: Math.sqrt(d.m)/1000} }},
+    {title: "keys, memory (time) (lower and smaller is better)",
+     type: "bubble",
+     xAxes: axes.keys,
+     yAxes: axes.memory,
+     datamap: function(d){ return {x: d.x, y:  d.m, r: Math.sqrt(d.t)/10} }},
+    {title: "keys / time (keys / memory) (higher and larger is better)",
+     type: "bubble",
+     xAxes: axes.keys,   
+     yAxesLabel: "",
+     datamap: function(d){ return {x: d.x, y:  d.x / Math.max(0.001,d.t), r: Math.sqrt(d.x / Math.max(1,d.m))*100} }},
+    {title: "keys / memory (keys / time) (higher and larger is better)",
+     type: "bubble",
+     xAxes: axes.keys,
+     yAxesLabel: "",
+     datamap: function(d){ return {x: d.x, y:  d.x / Math.max(1,d.m), r: Math.sqrt(d.x / Math.max(0.001,d.t))} }},
+    {title: "keys / time (memory / keys) (higher and smaller is better)",
+     type: "bubble",
+     xAxes: axes.keys,   
+     yAxesLabel: "",
+     datamap: function(d){ return {x: d.x, y:  d.x / Math.max(0.001,d.t), r: Math.sqrt(d.m / Math.max(1,d.x))} }},
+    {title: "keys / memory (time / keys) (higher and smaller is better)",
+     type: "bubble",
+     xAxes: axes.keys,
+     yAxesLabel: "",
+     datamap: function(d){ return {x: d.x, y:  d.x / Math.max(1,d.m), r: Math.sqrt(d.t / Math.max(1,d.x))*100} }},
+  ];
+  var rankings = [
+    {title: "time",
+     xAxes: axes.time,
+     score: function(d) { return d.t }},
+    {title: "memory",
+     xAxes: axes.memory,
+     score: function(d) { return d.m }},
   ];
   
   function prettyTime(t) {
+    if (t == 0) return "0";
     if (t < 2*1000) return t + "ms";
     if (t < 1000*60) return Math.round(t*10 / 1000)/10 + "s";
     return Math.round(t*10 / 1000/60)/10 + "min";
   }
   function prettyMem(t) {
-    if (t < 1024) return t + "bytes";
+    if (t == 0) return "0";
+    if (t < 1024) return t + "B";//"bytes";
     if (t < 1024*1024) return Math.round(t*10 / 1024)/10 + "KB";
     if (t < 1024*1024*1024) return Math.round(t*10 / 1024/1024)/10 + "MB";
     //if (t < 1024*1024*1024) 
     return Math.round(t*10 / 1024/1024/1024)/10 + "GB";
   }
-  function prettyCount(c){
-    if (c.toExponential) return c.toExponential();
-    return c+"";
+  function prettyKeyCount(c){
+    var e = "";
+    var l = "";
+    if (c.toExponential) e = c.toExponential() + " keys";
+    if (c.toLocaleString) l = c.toLocaleString() + " keys";
+
+    if (!e && !l) e = c + " keys";
+    
+    if (e && l) return l + " ("+e+")";
+    if (l) return l;
+    return e;
+  }
+  
+  function makeAxes(type,position,options,ranking){
+    var axis = {
+              type: type,
+              position: position
+            }
+    if (options) {
+      axis.scaleLabel = {labelString: options.label, display: !!options.label}      
+      if (options === axes.time || options === axes.memory) 
+        axis.ticks = {
+          beginAtZero: ranking,
+          autoSkip: true,
+          autoSkipPadding: 5,
+          callback: (options === axes.time ? function(value, index, values) {
+              return prettyTime(value);
+          } : function(value, index, values) {
+              return prettyMem(value);
+          })
+       }
+    }
+    return [axis];
   }
   
   function boxes(filter){
@@ -281,13 +394,18 @@ cat <<EOF
     output.innerHTML = "";
     
     function chosenoption(prefix, callback) {
-      boxes(prefix).map(function(i){ if (i.checked) callback(i.name.slice(prefix.length), i.nextSibling.textContent) })
+      boxes(prefix).map(function(i){ if (i.checked) callback(i.name.slice(prefix.length), i.nextSibling.textContent, i) })
     }
     
     
     var activemaps = [];
     var activemapslabels = [];
-    chosenoption("map_", function(map, text) { activemaps.push(map); activemapslabels.push(text); });
+    chosenoption("map_", function(map, text, input) { activemaps.push(map); 
+      var span = input;
+      while (span && span.nodeName != "SPAN") span = span.previousElementSibling;
+      if (span) text = span.textContent +  text
+      activemapslabels.push(text);
+    });
     
     chosenoption("ds_", function(source, sourcetext){
     chosenoption("model_", function(model, modeltext){
@@ -303,76 +421,91 @@ cat <<EOF
         queriesperkey = document.getElementById("pred_read").value*1;
         failqueriesperkey = document.getElementById("pred_fail").value*1;
       }
+      var key_min = document.getElementById("key_min").value*1;
+      var key_max = document.getElementById("key_max").value*1;
+    
+      var activemapsdatarows = [];
+      for (var i=0;i<activemaps.length;i++) {
+        function getRow(){
+          var row = data[activemaps[i]];
+          if (!row) return;
+          row = row[source];
+          if (!row) return;
+          if (model != "pred") {
+            row = row[queriesperkey];
+            if (!row) return;
+            row = row[failqueriesperkey];
+            if (!row) return;        
+          } else {
+            if (!row._predcache) {
+              if (!row[0] || !row[0][0] || !row[3] || !row[3][3] || !row[20] || !row[20][2] || !row[2] || !row[2][20] ) return;
+              var r0_0 = row[0][0];
+              var r3_3 = row[3][3];
+              var r2_20 = row[2][20];
+              var r20_2 = row[20][2];
+              var minlength = Math.min(Math.min(r0_0.length, r3_3.length), Math.min(r20_2.length, r2_20.length));
+              var ok = true;
+              for (var j=0;j<minlength;j++) if (r0_0[j].x != r3_3[j].x || r0_0[j].x != r2_20[j].x || r0_0[j].x != r20_2[j].x) {
+                console.log(data[activemaps[i]]);
+		  if (!activemaps[i].contains("TStringList"))
+                  alert("fail: " + activemaps[i] + " " +j+ " other runs do not have "+r0_0[j].x+" keys");
+                ok = false;
+                break;
+              }
+              if (!ok) return;
+              row._predcache = [];
+              for (var j=0;j<minlength;j++) {
+                var a = r0_0[j].t; var b = r3_3[j].t; var c = r20_2[j].t; var d = r2_20[j].t;
+                //Pseudo inverse of [1,0,0; 1,3,3; 1,20,2; 1,2,20]'
+                var subtiming = [
+                 0.662269 * a + 0.46438 * b - 0.063325 * c - 0.063325 * d,
+                -0.032982 * a - 0.01715 * b + 0.052844 * c - 0.002712 * d,
+                -0.032982 * a - 0.01715 * b - 0.002712 * c + 0.052844 * d
+                ];
+                if (subtiming[0] < 0) subtiming[0] = 0; //some maps work as time machine
+                if (subtiming[1] < 0) subtiming[1] = 0;
+                if (subtiming[2] < 0) subtiming[2] = 0;
+                row._predcache.push(subtiming);
+              }
+            }
+            if (!row._predcache) return;
+            var predcache = row._predcache;
+            var r0_0 = row[0][0];
+            if (!row[queriesperkey]) row[queriesperkey] = {};
+            row = row[queriesperkey];
+            if (!row[failqueriesperkey]) {
+              var newarray = [];
+              for (var j=0;j<predcache.length;j++) 
+                newarray.push({
+                  x: r0_0[j].x, 
+                  m: r0_0[j].m,
+                  t: Math.max(1, writes * predcache[j][0] + queriesperkey * predcache[j][1] + failqueriesperkey * predcache[j][2])
+                })
+              row[failqueriesperkey] = newarray;
+            }
+            row = row[failqueriesperkey];
+          }
+          return row
+        }
+        var row = getRow()
+        activemapsdatarows.push(row);
+      }
+
+
     chosenoption("metric_", function(metric, metrictext){
-      var metricf = metrics[metric * 4 + 3];
+      var metricf = metrics[metric].datamap;
+      var chartType = "type" in metrics[metric] ? metrics[metric].type: "line";
     chosenoption("xaxis_", function(xaxis, xaxistext){
     chosenoption("yaxis_", function(yaxis, yaxistext){
    
-    var key_min = document.getElementById("key_min").value*1;
-    var key_max = document.getElementById("key_max").value*1;
 
     var datasets = [];
     var basedatasets = [];
     var basedatasetsoffset = [];
     for (var i=0;i<activemaps.length;i++) {
-      row = data[activemaps[i]];
+      var row = activemapsdatarows[i];
       if (!row) continue;
-      row = row[source];
-      if (!row) continue;
-      if (model != "pred") {
-        row = row[queriesperkey];
-        if (!row) continue;
-        row = row[failqueriesperkey];
-        if (!row) continue;        
-      } else {
-        if (!row._predcache) {
-          if (!row[0] || !row[0][0] || !row[3] || !row[3][3] || !row[20] || !row[20][2] || !row[2] || !row[2][20] ) continue;
-          var r0_0 = row[0][0];
-          var r3_3 = row[3][3];
-          var r2_20 = row[2][20];
-          var r20_2 = row[20][2];
-          var minlength = Math.min(Math.min(r0_0.length, r3_3.length), Math.min(r20_2.length, r2_20.length));
-          var ok = true;
-          for (var j=0;j<minlength;j++) if (r0_0[j].x != r3_3[j].x || r0_0[j].x != r2_20[j].x || r0_0[j].x != r20_2[j].x) {
-            console.log(data[activemaps[i]]);
-            alert("fail: " + activemaps[i] + " " +j+ " other runs do not have "+r0_0[j].x+" keys");
-            ok = false;
-            break;
-          }
-          if (!ok) continue;
-          row._predcache = [];
-          for (var j=0;j<minlength;j++) {
-            var a = r0_0[j].t; var b = r3_3[j].t; var c = r20_2[j].t; var d = r2_20[j].t;
-            //Pseudo inverse of [1,0,0; 1,3,3; 1,20,2; 1,2,20]'
-            var subtiming = [
-             0.662269 * a + 0.46438 * b - 0.063325 * c - 0.063325 * d,
-            -0.032982 * a - 0.01715 * b + 0.052844 * c - 0.002712 * d,
-            -0.032982 * a - 0.01715 * b - 0.002712 * c + 0.052844 * d
-            ];
-            if (subtiming[0] < 0) subtiming[0] = 0; //some maps work as time machine
-            if (subtiming[1] < 0) subtiming[1] = 0;
-            if (subtiming[2] < 0) subtiming[2] = 0;
-            row._predcache.push(subtiming);
-          }
-        }
-        if (!row._predcache) continue;
-        var predcache = row._predcache;
-        var r0_0 = row[0][0];
-        if (!row[queriesperkey]) row[queriesperkey] = {};
-        row = row[queriesperkey];
-        if (!row[failqueriesperkey]) {
-          var newarray = [];
-          for (var j=0;j<predcache.length;j++) 
-            newarray.push({
-              x: r0_0[j].x, m: r0_0[j].m,
-              t: Math.max(1, writes * predcache[j][0] + queriesperkey * predcache[j][1] + failqueriesperkey * predcache[j][2])
-            })
-          row[failqueriesperkey] = newarray;
-        }
-        row = row[failqueriesperkey];
-      }
-      
-      basedatasets.push(row);
+      basedatasets.push(row)
       basedatasetsoffset.push(0);
       var newdata = [];
       for (var j=0;j<row.length;j++) {
@@ -380,14 +513,20 @@ cat <<EOF
         else if (row[j].x > key_max ) break;
         else newdata.push(metricf(row[j]));
       }
-      datasets.push( {
+      var dataset = {
          label: activemapslabels[i],
          data: newdata,
          fill: false,
          borderWidth: 3,
          borderColor: colors[activemaps[i]],
-         backgroundColor: colors[activemaps[i]]
-      } );
+         backgroundColor: colors[activemaps[i]],
+         hitRadius: 5
+      }
+      if (chartType == "bubble") {
+        dataset.backgroundColor = dataset.backgroundColor + "44"; //add alpha transparancy
+        dataset.hoverBorderWidth = 6;
+      }
+      datasets.push(dataset);
     }
     
     var ctx = document.createElement("canvas")
@@ -396,35 +535,38 @@ cat <<EOF
     
       var myChart;
       myChart = new Chart(ctx, {
-        "type": "line",
+        "type": chartType,
         "data": {
           datasets: datasets 
         }, options: {
             scales: {
-                xAxes: [{
-                    type: xaxis,
-                    position: 'bottom',
-                    scaleLabel: {labelString: metrics[metric*4 + 1], display: metrics[metric*4 + 1] != ""}
-                }],
-                yAxes: [{
-                    type: yaxis,
-                    position: 'left',
-                    scaleLabel: {labelString: metrics[metric*4 + 2], display: metrics[metric*4 + 1] != ""}
-                }]  
-
+                xAxes: makeAxes(xaxis, "bottom", metrics[metric].xAxes),
+                yAxes: makeAxes(yaxis, "left", metrics[metric].yAxes)
             },
          title: {
                     display: true,
-                    text: sourcetext + " " + modeltext + (model == "pred" ? "estimate for " + writes+","+queriesperkey+","+failqueriesperkey:"") + " " + metrics[metric*4],
+                    text: sourcetext + " " + modeltext + (model == "pred" ? "estimate for " + writes+","+queriesperkey+","+failqueriesperkey:"") + ": " + metrics[metric].title,
                     titleFontColor: "black"
                 },
           tooltips: {
             mode: 'point', 
+            itemSort: function(a,b){
+              var pa = basedatasets[a.datasetIndex][a.index + basedatasetsoffset[a.datasetIndex]];
+              var pb = basedatasets[b.datasetIndex][b.index + basedatasetsoffset[b.datasetIndex]];
+              
+              if (pa.t < pb.t) return -1;
+              else if (pa.t > pb.t) return 1;
+              else if (pa.m < pb.m) return -1;
+              else if (pa.m > pb.m) return 1;
+              else if (a.datasetIndex < b.datasetIndex) return -1;
+              else if (a.datasetIndex > b.datasetIndex) return 1;
+              else return 0;
+            },
             callbacks: {
             afterLabel: function(ti){
              // console.log 	(data.toSource())
               var p = basedatasets[ti.datasetIndex][ti.index + basedatasetsoffset[ti.datasetIndex]];
-              return prettyCount(p.x) + " keys, " + prettyTime(p.t)+ ", "+prettyMem(p.m);
+              return prettyKeyCount(p.x) + ", " + prettyTime(p.t)+ ", "+prettyMem(p.m);
             }}},
           legend: {
             //labels: {usePointStyle: true},
@@ -442,11 +584,107 @@ cat <<EOF
     })
     })
     })
-    })
-    })
     
  
+ 
+      chosenoption("ranking_", function(rankingid, text) { 
+        var ranking = rankings[rankingid]
+        var targetKeyCount = 0;
+        activemapsdatarows.map(function(row){if (row) row.map(function(d){
+          if (d.x >= key_min && d.x <= key_max && d.x > targetKeyCount) targetKeyCount = d.x;
+        })});
+        
+        if (targetKeyCount == 0) return;
+        var mapPerformance = [];
+        for (var i=0;i<activemaps.length;i++) {
+          var row = activemapsdatarows[i];
+          if (!row) continue;
+          var p = null
+          row.map(function(d){if (d.x == targetKeyCount) p = d})
+          if (p) mapPerformance.push({
+            "i": i,
+            "testcase": p,
+            "score": ranking.score(p)
+          })
+        }
+        if (mapPerformance.length == 0) return;
+        mapPerformance.sort(function(a,b) { return a.score - b.score })
+        console.log(mapPerformance)
+        var ctx = document.createElement("canvas")
+        ctx.height = mapPerformance.length * 4+30;
+        output.appendChild(ctx);
+        var myChart = new Chart(ctx, {
+          type: "horizontalBar",
+          "data": {
+            datasets: [{
+              data: mapPerformance.map(function(it){return it.score}),
+              fill: true,
+              borderWidth: 3,
+              borderColor: mapPerformance.map(function(it){return colors[activemaps[it.i]]}),
+              backgroundColor: mapPerformance.map(function(it){return colors[activemaps[it.i]]}),
+            }] 
+          }, options: {
+            responsive: true,
+            showInlineValues : true,
+            legend: {
+              position: 'right',
+            },
+            title: {
+              display: true,
+              text: ranking.title + " ranking for " + prettyKeyCount(targetKeyCount)
+            },
+            tooltips: {
+              callbacks: {
+              afterLabel: function(ti){
+              // console.log 	(data.toSource())
+                var p = mapPerformance[ti.index].testcase;
+                return prettyKeyCount(p.x) + ", " + prettyTime(p.t)+ ", "+prettyMem(p.m);
+              }}},
+            legend: { display: false }, 
+            scales: {
+              xAxes: makeAxes("linear", "bottom", ranking.xAxes, true),
+              yAxes: [{
+                position: 'left',
+                type: "category",
+                labels: mapPerformance.map(function(it){return activemapslabels[it.i]}),
+                scaleLabel: {labelString: "map", display: true}
+              }]  
+            },            
+            "hover": {
+              "animationDuration": 0
+            },
+            "animation": {
+              "duration": 1,
+              "onComplete": function() {
+                //https://stackoverflow.com/questions/42556835/show-values-on-top-of-bars-in-chart-js/46803027#46803027
+                var chartInstance = this.chart,
+                  ctx = chartInstance.ctx;
+
+                ctx.font = Chart.helpers.fontString(Chart.defaults.global.defaultFontSize, Chart.defaults.global.defaultFontStyle, Chart.defaults.global.defaultFontFamily);
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'bottom';
+
+                this.data.datasets.forEach(function(dataset, i) {
+                  var meta = chartInstance.controller.getDatasetMeta(i);
+                  meta.data.forEach(function(bar, index) {
+                    var p = mapPerformance[index].testcase;
+                    var data =  prettyTime(p.t)+ ", "+prettyMem(p.m)
+                    ctx.fillText(data, bar._model.x + 5, bar._model.y + 7);
+                  });
+                });
+              }
+            },
+          }
+        });
+        oldcharts.push(myChart)
+      });
+ 
+    })
+    })
   }
+
+
+
 
     boxes().map(function(i){i.onclick = regen});
     regen()
