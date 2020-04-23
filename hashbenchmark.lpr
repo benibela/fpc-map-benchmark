@@ -69,6 +69,7 @@ uses
 
 type TMapKind = (mkHash, mkParallelHash, mkTree, mkArray);
      TBenchmarkFunc = function: TObject;
+     TBenchmarkMeasureMemoryUsageFunc = function(const oldHeap, newHeap: TFPCHeapStatus): sizeint;
 
 procedure flushall;
 begin
@@ -146,9 +147,12 @@ var data, faildata: array of string;
     runMode: (rmList, rmDumpData, rmSingleRun, rmAddativeKeyCount);
     mapFilter: string;
 
+function getMemoryUsageDef(const oldHeap, newHeap: TFPCHeapStatus): sizeint;
+begin
+  result := newHeap.CurrHeapUsed - oldHeap.CurrHeapUsed
+end;
 
-
-function benchmarkf(kind: TMapKind; name: string; p: TBenchmarkFunc): boolean;
+function benchmarkf(kind: TMapKind; name: string; p: TBenchmarkFunc; memoryUsage: TBenchmarkMeasureMemoryUsageFunc): boolean;
 type tmeasurednumber = {double}int64;
 const repcount = 1;
 var
@@ -166,6 +170,7 @@ begin
   GetMemoryManager(m);
   mean := 0;
   meanmemory := 0;
+  if memoryUsage = nil then memoryUsage := @getMemoryUsageDef;
   result := true;
   //Oversum: How often the benchmark function is run before measuring
   oversum := 1;
@@ -178,7 +183,7 @@ begin
     for j := 1 to oversum do
       maps[j] := p();
     timing[r] := round((now - tms)*MSecsPerDay);;
-    memory[r] := (m.GetFPCHeapStatus().CurrHeapUsed - heapstatus.CurrHeapUsed) div oversum;
+    memory[r] := memoryUsage(heapstatus, m.GetFPCHeapStatus()) div oversum;
     for j := 1 to oversum do
       maps[j].free; //free the map after benchmark to measure insertion time without freeing time
     if timing[r] > timelimit then begin
@@ -215,7 +220,7 @@ begin
   flushall;
 end;
 
-procedure benchmark(kind: TMapKind; name: string; args: string; p: TBenchmarkFunc);
+procedure benchmark(kind: TMapKind; name: string; args: string; p: TBenchmarkFunc; memoryUsage: TBenchmarkMeasureMemoryUsageFunc=nil);
 begin
   name := StringReplace(name,' ','_',[rfReplaceAll]);
   name := StringReplace(name,'''','',[rfReplaceAll]);
@@ -231,7 +236,7 @@ begin
       if (kind = mkTree) and (keycount > 100000) then exit;
     end;
   end;
-  if not benchmarkf(kind, name, p) then begin
+  if not benchmarkf(kind, name, p, memoryUsage) then begin
     flush(system.output);
     flush(stdout);
     halt;
@@ -811,6 +816,57 @@ type TTestAVK_GHashMapLP = specialize TTestAVK_GenericMap<specialize TGHashMapLP
 type TTestCustomMap = specialize TG_TestXDefault<TCustomMap, specialize TG_CallAdd<TCustomMap>>;
 {$endif}
 
+{$ifdef benchmarkExternalGCC}
+function external_createMap(): pointer; stdcall;  external 'gcc_std_unordered_map.so' name 'createMap';
+procedure external_add(map: pointer; str: pchar; strlen: sizeint; data: pointer); stdcall; external 'gcc_std_unordered_map.so' name 'add';
+function external_get(map: pointer; str: pchar; strlen: sizeint): pointer; stdcall; external 'gcc_std_unordered_map.so' name 'get';
+function external_contains(map: pointer; str: pchar; strlen: sizeint): integer; stdcall; external 'gcc_std_unordered_map.so' name 'contains';
+function external_getMemoryUsage(): sizeint; stdcall; external 'gcc_std_unordered_map.so' name 'getMemoryUsage';
+procedure external_freeMap(map: pointer); stdcall; external 'gcc_std_unordered_map.so' name 'freeMap';
+type
+  TExternalMapWrapper = class
+    map: pointer;
+    Constructor create;
+    destructor destroy; override;
+    procedure add(const key: string; value: pointer); inline;
+    function get(const key: string): pointer; inline;
+    function contains(const key: string): boolean; inline;
+    property defaultget[const key: string]: pointer read get write add ; default;
+  end;
+constructor TExternalMapWrapper.create;
+begin
+  map := external_createMap()
+end;
+
+procedure TExternalMapWrapper.add(const key: string; value: pointer);
+begin
+  external_add(map, pchar(key), length(key), value)
+end;
+
+function TExternalMapWrapper.get(const key: string): pointer;
+begin
+  result := external_get(map, pchar(key), length(key))
+end;
+
+function TExternalMapWrapper.contains(const key: string): boolean;
+begin
+  result := external_contains(map, pchar(key), length(key)) <> 0;
+end;
+
+destructor TExternalMapWrapper.destroy;
+begin
+  external_freeMap(map);
+  inherited
+end;
+
+function measureMemoryFromSO(const oldHeap, newHeap: TFPCHeapStatus): sizeint;
+begin
+  result := external_getMemoryUsage();
+end;
+
+type TTestExternalGCCStdUnorderedMap = specialize TG_TestXDefault<TExternalMapWrapper, specialize TG_CallAdd<TExternalMapWrapper>>;
+
+{$endif}
 
 class function TG_StringHash.c(const a, b: tstring): boolean;
 begin
@@ -1126,6 +1182,8 @@ begin
     {$endif}
 
     {$ifdef benchmarkCustomMap}benchmark(mkHash, 'custom', '?', @TTestCustomMap.test);{$endif}
+
+    {$ifdef benchmarkExternalGCC}benchmark(mkHash, 'libstdc++''s std::unordered_map', '* -> *', @TTestExternalGCCStdUnorderedMap.test, @measureMemoryFromSO );{$endif}
 
     if runMode <> rmDumpData then begin
       keycount := keycount + basekeycount;
