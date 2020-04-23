@@ -597,7 +597,7 @@ end;
 constructor TMyBKHashList.create;
 begin
   trait := hashlist.TCaseSensitiveTraits.Create;
-  inherited create(trait, keycount div 2);
+  inherited create(trait, max(1, keycount div 2));
 end;
 destructor TMyBKHashList.destroy;
 begin
@@ -620,7 +620,7 @@ end;
 
 constructor TMyStrHashMap.create;
 begin
-  inherited create(keycount div 2, false);
+  inherited create(max(1, keycount div 2), false);
 end;
 procedure TMyStrHashMap.insert(const key: string; value: pointer);
 begin
