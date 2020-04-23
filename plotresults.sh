@@ -81,6 +81,7 @@ cat <<EOF
      &nbsp;&nbsp;&nbsp;&nbsp;<b>keys limit:</b> 
      <input id="key_min" value="1000" oninput="regen()"> to
      <input id="key_max" value="100000000" oninput="regen()">  
+     <button onclick="changecolorprompts()">change colors</button>
 
   <div id="plotoutput"></div>
   <h3>General observations:</h3>
@@ -359,6 +360,25 @@ cat <<EOF
       colors[d.map] = c.hexString();
       mapInCat[cat]++;
   }) 
+  
+  function changecolorprompts(){
+    var mapname = prompt("Which map color should be changed?", "")
+    if (!mapname) return;
+    mapname = mapname.toLowerCase();
+    var found = false
+    var asked = {};
+    for (var i=0;i<rawdata.length;i++) { 
+      var name = rawdata[i].map; 
+      if (!(name in asked) && name.toLowerCase().contains(mapname)) {
+        asked[name] = true;
+        found = true;
+        var color = prompt("Choose color for map " + name, colors[name])
+        if (color) colors[name] = color; else break;
+      }
+    }
+    if (!found) { alert("Map " + mapname + " not found"); return; }
+    regen()
+  }
   
   function myhighlight(chartid, datasetid){
     var chart = oldcharts[chartid];
