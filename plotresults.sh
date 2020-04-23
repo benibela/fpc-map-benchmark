@@ -10,7 +10,10 @@ cat <<EOF
     <link rel="canonical" href="http://www.benibela.de/fpc-map-benchmark_en.html">    
     <script src="js/Chart-2.9.3.min.js"></script>
     <link rel="stylesheet" href="css/Chart-2.9.3.css">
-    <style>.prefix { min-width: 8.5em; display: inline-block }</style>
+    <style>.prefix { min-width: 8.5em; display: inline-block }
+           li {padding-bottom: 0.5em}
+           body { line-height: 1.3 } 
+    </style>
     
     <body>
      <h1>Free Pascal hash maps</h1>
@@ -103,7 +106,7 @@ cat <<EOF
   
   <ul>
   <li> <a href="https://github.com/avk959/LGenerics">avk959's LGenerics</a> are overall the fastest maps in the benchmark. For insertions only, GLiteChainHashMap is the fastest, followed by GOrderedHashMap and GChainHashMap. However, for lookups there is a turning point at around 100 000 keys, where the GHashMapLP, GHashMapLPT, GHashMapQP and GLiteHashMapLP maps become the fastest maps. They are faster than rtl generics; and faster than TFPHashList, except in the case of only writing short keys. Unfortunately, these maps require fpc 3.2. </li>
-  <li>  <a href="http://yann.merignac.free.fr/unit-gcontnrs.html">Yamer's TGenHashMap</a> in the gcontnrs package is fast and memory efficient. It is faster than the rtl generics maps for short keys, and in-between for long keys. Similarly, its memory usage is between the best and worst maps of rtl generics. For short keys, it behaves similar to the maps of avk959 with better memory usage; for long keys, it is slower.  <!-- and uses less memory than the non-cuckoo maps, but requires more memory than the memory-efficient cuckoo-maps. <!--Its insertion speed is slower than TFPHashList, but for less than 200 000 small keys the insertion performance is better than avk959's GLiteHashMapLP and worse than GLiteChainHashMap. The lookup performance is better than the one of TFPHashList, but worse than GLiteHashMapLP, but for short keys better than .-->
+  <li>  <a href="http://yann.merignac.free.fr/unit-gcontnrs.html">Yamer's TGenHashMap</a> in the gcontnrs package is fast and memory efficient. It is the fastest map for lookups of short and dictionary keys. It faster than the rtl generics maps for short keys, and in-between for long keys. Similarly, its memory usage is between the best and worst maps of rtl generics. For short keys, it behaves similar to the maps of avk959 with better memory usage; for long keys, it is slower.  <!-- and uses less memory than the non-cuckoo maps, but requires more memory than the memory-efficient cuckoo-maps. <!--Its insertion speed is slower than TFPHashList, but for less than 200 000 small keys the insertion performance is better than avk959's GLiteHashMapLP and worse than GLiteChainHashMap. The lookup performance is better than the one of TFPHashList, but worse than GLiteHashMapLP, but for short keys better than .-->
   </li>
   <li>  <a href="https://github.com/BeRo1985/flre/">Bero's FLRE cache map</a> is an internally used map in the FLRE-package, so it is not the easiest map to use. It is similar to TFPHashList, avk959's LGenerics and Yamer's map for short keys, and used to be the fastest map for long keys in older versions of the benchmark. However, it has slightly higher memory usage. A closer examination of its code shows that it uses a very fast hash function, so the performance might come from the hash function not the map construction. It does not handle deletions well and keeps memory unfreed till the next resize. Currently it keeps items in insertion-order, but there is no guarantee of that.
   </li>
@@ -132,16 +135,31 @@ cat <<EOF
   
   <ul>
   <li>Enter the minimal and maximal count of expected items at "keys limit".</li>
-  <li>Select the metric "time, memory".</li>
-  <li>Select the model "custom prediction" and enter how often each item will be inserted, read, not found.</li>
+  <li>Select the model "custom prediction" and enter how often each item will be inserted, read, and not found.</li>
   <li>Select the dataset that corresponds to your key length.</li>
   <li>Select the maps you consider using.</li>
-  <li>The scatter plot will then show an estimate of time and memory requirements. 
-  The points of fastest map will be on the left side, the maps with the lowest memory usage will be at the bottom.<br> Therefore, if you think of the plot as split into quarters, the bottom left will have optimal maps, the top left will have fast maps with huge memory usage, the bottom right will have memory efficient slow maps, and the top right will have useless maps.  </li>
+  </ul>
+  
+  Then you can choose a metric:
+  <ul>
+  <li>The <i>"ranking" metrics</i> might be the easiest metric to understand. <br>
+  The rankings for time or memory sort all selected maps according to their time and memory performance. Then the best map is shown at the top of the list.<br>
+  The ranking is only calculated for the upper limit entered in the "keys limit" field.
+  </li>
+
+  <li>The bubble metric <i>"keys/time (memory/keys)"</i> shows speed and memory usage for varying key counts.<br>
+      The fastest map will be shown at the top of the plot. The most memory efficient map has the smallest bubbles (only the bubbles in the same column can be compared to each other).<br>
+      You can easily see how the performance of the maps changes when the key count increases. Hover the mouse over a bubble to see the exact performance stats in a tooltip.
+  </li>
+  
+  <li>The metric <i>"time, memory"</i> shows how time and memory performance relate to each other. <br>
+  The points of fastest map will be on the left side, the maps with the lowest memory usage will be at the bottom.<br> Therefore, if you think of the plot as split into quarters, the bottom left will have optimal maps, the top left will have fast maps with huge memory usage, the bottom right will have memory efficient slow maps, and the top right will have useless maps.  <br>
+  This might be the most important metric, but also the hardest to understand. If you set minimal and maximal keys limit to the same value, each map is shown as single point, which makes it easier to see which map is the fastest and which one is the most lightweight.
+  </li>
   </ul>
   
   If this page is too slow, you can uncheck all checkboxes in a category, then no plots are shown and selections are instantanously. You can also disable maps by clicking their name on the legend without affecting other plots.
-  Some maps have no datapoints for high key count, then only points with low key counts are shown and the map might appear more efficient than it is in the scatter plot. Move the mouse over the data points to check. 
+  Some maps have no datapoints for high key count, then only points with low key counts are shown and the map might appear more efficient than it is in the scatter plot. Move the mouse over the data points to check, the tooltip shows the actual number of keys, time and memory usage. 
   
   <br><br>This benchmark was compiled with freepascal 3.3.1 (r44126), -O3, and run on a 64-bit Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz openSUSE 12.2 system. Older versions: <a href="fpc-map-benchmark-r34557_en.html">fpc 3.1.1 (r35800)</a>, <a href="fpc-map-benchmark-r34557_en.html">fpc 3.1.1 (r34557)</a>
   
