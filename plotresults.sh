@@ -24,7 +24,7 @@ cat <<EOF
      
      <br><em>built-in:</em>
      
-     $(lastunit=""; ./hashbenchmark --mode=list | while read map; do
+     $(lastunit=""; LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH ./hashbenchmark --mode=list | while read map; do
        prettyname=$(tr _ ' ' <<<"$map" | sed -e "s/s /'s /")
        unit=$(grep -oE '^[^. _]+' <<<"$prettyname")
        if [[ $unit != $lastunit ]]; then 
@@ -34,10 +34,11 @@ cat <<EOF
        lastunit=$unit;
        if [[ $map =~ contnrs|ghashmap|gmap|rtl-generic ]] && [[ ! $map =~ shortstring ]]; then checked="checked"; else checked=""; fi
        if [[ $prettyname = "rtl-generic's linear.shortstring" ]]; then echo '<br><span class="prefix"></span>'; fi
-       echo '<input type="checkbox" name="map_'$map'" '$checked'>'${prettyname#"$prefix"};
+       echo '<input type="checkbox" name="map_'$map'" '$checked'>'
+       if [[ $prettyname = "BeniBela's Hashmap" ]]; then echo 'TXQHashmapStr'; else echo ${prettyname#"$prefix"}; fi
        if [[ $prettyname = "rtl-generic's linear" ]]; then echo ' (TDictionary)'; 
        elif [[ $prettyname = "rtl-generic's cuckoo6.shortstring" ]]; then echo '<br><em>3rd party:</em>'; 
-       elif [[ $prettyname = "BeniBela's Hashmap" ]]; then echo ' (XQuery)'; 
+       elif [[ $prettyname = "avk959's GLiteChainHashMap" ]]; then echo '<br><br><em>non-Pascal:</em>'; 
        fi
      done )<br>
      
@@ -116,7 +117,7 @@ cat <<EOF
   <h4>Other built-in maps:</h4>
   
   <ul>
-  <li>The array based TStringList and TFPGMap are the most memory efficient, using less memory than even the cuckoo maps. However, as they are not hash maps, their usage is extremely slow, even if the maps are sorted, so they are nearly useless as maps. Their default setting of unsorted and (in case of TStringList) case-insensitive matching are quite dangerous. </li>
+  <li>The array based TStringList and TFPGMap are the most memory efficient, using less memory than even the cuckoo maps. However, as they are not hash maps, their usage is extremely slow, even if the maps are sorted, so they are nearly useless as maps. Their default setting of unsorted and (in case of TStringList) case-insensitive and local-aware matching are quite dangerous. </li>
   
   <li>ghashmap is as fast as the rtl-generics maps for short keys, but similar to TFPHashList its performance degrades with longer keys. Unlike TFPHashList it is not the fastest before the slow-down afterwards, so it becomes one of the slowest. It also has a high memory usage. </li>
 
@@ -161,7 +162,8 @@ cat <<EOF
   If this page is too slow, you can uncheck all checkboxes in a category, then no plots are shown and selections are instantanously. You can also disable maps by clicking their name on the legend without affecting other plots.
   Some maps have no datapoints for high key count, then only points with low key counts are shown and the map might appear more efficient than it is in the scatter plot. Move the mouse over the data points to check, the tooltip shows the actual number of keys, time and memory usage. 
   
-  <br><br>This benchmark was compiled with freepascal 3.3.1 (r44126), -O3, and run on a 64-bit Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz openSUSE 12.2 system. Older versions: <a href="fpc-map-benchmark-r34557_en.html">fpc 3.1.1 (r35800)</a>, <a href="fpc-map-benchmark-r34557_en.html">fpc 3.1.1 (r34557)</a>
+  <br><br>This benchmark was compiled with freepascal 3.3.1 (r44777), -O4, and run on a 64-bit Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz openSUSE 12.2 system. <!-- gcc8.3.0, -O4 -->
+  Older versions: <a href="fpc-map-benchmark-r44126_en.html">fpc 3.3.1 (r44126), -O3</a> <a href="fpc-map-benchmark-r35800_en.html">fpc 3.1.1 (r35800)</a>, <a href="fpc-map-benchmark-r34557_en.html">fpc 3.1.1 (r34557)</a>
   
        <script>
 EOF
@@ -353,8 +355,8 @@ cat <<EOF
     return res;
   }
   
-  var colorOfCat = ["#4daf4a", "#e41a1c", "#377eb8", "#984ea3"]
-  var mapInCat = [0,0,0,0,0,0,0,0]
+  var colorOfCat = ["#4daf4a", "#e41a1c", "#377eb8", "#984ea3", "#FFFF33"]
+  var mapInCat = [0,0, 0,0, 0,0, 0,0, 0,0]
   var colors = {};
   var oldcharts = [];
   var chartmeta = [];
@@ -364,10 +366,11 @@ cat <<EOF
       if (/contnrs.TFP|ghashmap|lazfglhash/.test(d.map)) cat = 0;
       else if (/fgl.TFP|gmap|lazfglhash|classes/.test(d.map)) cat = 1;
       else if (/rtl-generics/.test(d.map)) cat = 2;
+      else if (/std::unordered/.test(d.map)) cat = 4;
       else cat = 3;   
       //colorCategories[d.map] = cat;
       var c = Color(colorOfCat[cat]);
-      cat = 2 * cat;
+      cat = 2 * cat; //todo: this line is useless?
       if (/shortstring/.test(d.map)) {c.hue(c.hue()+70); cat++;}
       if (mapInCat[cat] < 3) c.darken(0.2 * (3 - mapInCat[cat]));
       else if (mapInCat[cat] > 3 && mapInCat[cat] < 7) c.lighten(0.2 * (mapInCat[cat] - 3));
@@ -669,7 +672,7 @@ cat <<EOF
             },
             title: {
               display: true,
-              text: ranking.title + " ranking for " + prettyKeyCount(targetKeyCount)
+              text: sourcetext + " " + modeltext + (model == "pred" ? "estimate for " + writes+","+queriesperkey+","+failqueriesperkey:"") + ": "+ ranking.title + " ranking for " + prettyKeyCount(targetKeyCount)
             },
             tooltips: {
               callbacks: {
