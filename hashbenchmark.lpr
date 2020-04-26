@@ -454,6 +454,10 @@ type
     function getValue(const key: string): pointer; inline;
   end;
 
+  TStringListSortedCompareStr = class(TStringListSorted)
+    Function DoCompareText(const s1,s2 : string) : PtrInt; override;
+  end;
+
   constructor TStringListSorted.create;
   begin
     inherited;
@@ -466,7 +470,17 @@ type
     result := pointer(Objects[IndexOf(key)]);
   end;
 
+  function TStringListSortedCompareStr.DoCompareText(const s1,s2 : string) : PtrInt;
+  begin
+    result := CompareStr(s1, s2);
+  end;
+
 type TTestStringList = specialize TG_TestXXXX<TStringListSorted,
+    specialize TG_CallAddObject<TStringListSorted>,
+    specialize TG_CallGetValue<TStringListSorted>,
+    specialize TG_CallContainsIndexOf<TStringListSorted>,
+    TObject>;
+type TTestStringListCompareStr = specialize TG_TestXXXX<TStringListSortedCompareStr,
     specialize TG_CallAddObject<TStringListSorted>,
     specialize TG_CallGetValue<TStringListSorted>,
     specialize TG_CallContainsIndexOf<TStringListSorted>,
@@ -1133,6 +1147,7 @@ begin
     benchmark(mkTree, 'gmap.TMap.shortstring', '* -> *', @TTestGMapShortString.test);
     benchmark(mkArray, 'fgl.TFPGMap (sorted)', '* -> *', @TTestFPGMap.test);
     benchmark(mkArray, 'classes.TStringList_(sorted)', 'string -> TObject', @TTestStringList.test);
+    benchmark(mkArray, 'classes.TStringList_(CompareStr)', 'string -> TObject', @TTestStringListCompareStr.test);
     {$ifdef benchmarkIniFiles}benchmark(mkHash, 'inifiles.TStringHash', 'string -> integer', @testIniFiles);{$endif}
 
     {$ifdef benchmarkLAZFGLHash}benchmark(mkHash, 'lazfglhash.TLazFPGHashTable', 'string -> *', @TTestLazFPGHashTable.test);{$endif}
